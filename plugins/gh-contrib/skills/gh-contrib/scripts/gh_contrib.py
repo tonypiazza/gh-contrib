@@ -78,5 +78,54 @@ def run_gh(args, runner=_default_runner, sleep=time.sleep, _attempt=1):
         sys.exit("error: gh returned output that could not be parsed as JSON.")
 
 
+_ORIGIN_RE = re.compile(
+    r"(?:^|@|/|//)github\.com[:/](?P<owner>[^/]+)/(?P<name>[^/]+?)(?:\.git)?/?$"
+)
+
+
+def parse_origin(url):
+    """Parse a GitHub git remote URL into 'owner/name', or None if not GitHub."""
+    if not url:
+        return None
+    m = _ORIGIN_RE.search(url.strip())
+    if not m:
+        return None
+    return f"{m.group('owner')}/{m.group('name')}"
+
+
+def _default_git_runner(args):
+    """Run `git <args>` and return the CompletedProcess."""
+    return subprocess.run(args, capture_output=True, text=True)
+
+
+def _git_origin(runner=None):
+    """Return the origin remote URL, or None if not in a git repo / no origin.
+
+    `runner` is injectable for testing and is called as `runner(["git", ...])`,
+    returning an object with `.returncode` and `.stdout`.
+    """
+    try:
+        proc = (runner or _default_git_runner)(
+            ["git", "remote", "get-url", "origin"]
+        )
+    except FileNotFoundError:
+        sys.exit("error: git is not installed or not on PATH.")
+    if proc.returncode != 0:
+        return None
+    return (proc.stdout or "").strip()
+
+
+def resolve_repo(runner=None):
+    """Resolve the current repo as 'owner/name' from git origin, or exit clearly."""
+    origin = _git_origin(runner=runner)
+    repo = parse_origin(origin) if origin else None
+    if not repo:
+        sys.exit(
+            "error: not in a GitHub repository (no GitHub 'origin' remote). "
+            "Use --all to query your configured cross-repo scope instead."
+        )
+    return repo
+
+
 if __name__ == "__main__":  # pragma: no cover - wired up in Task 6
     pass

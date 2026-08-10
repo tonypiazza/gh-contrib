@@ -62,5 +62,48 @@ class TestRunGh(unittest.TestCase):
         self.assertEqual(slept, [1, 2])  # 2**0, 2**1
 
 
+class TestResolveRepo(unittest.TestCase):
+    def test_ssh_url(self):
+        self.assertEqual(
+            g.parse_origin("git@github.com:opensearch-project/data-prepper.git"),
+            "opensearch-project/data-prepper",
+        )
+
+    def test_https_url(self):
+        self.assertEqual(
+            g.parse_origin("https://github.com/tonypiazza/gh-metrics.git"),
+            "tonypiazza/gh-metrics",
+        )
+
+    def test_https_url_no_suffix(self):
+        self.assertEqual(
+            g.parse_origin("https://github.com/acme/widget"),
+            "acme/widget",
+        )
+
+    def test_non_github_returns_none(self):
+        self.assertIsNone(g.parse_origin("git@gitlab.com:acme/widget.git"))
+
+    def test_empty_returns_none(self):
+        self.assertIsNone(g.parse_origin(""))
+
+    def test_resolve_repo_success(self):
+        runner = make_runner([FakeCompleted(
+            stdout="https://github.com/acme/widget.git", returncode=0)])
+        self.assertEqual(g.resolve_repo(runner=runner), "acme/widget")
+
+    def test_resolve_repo_no_origin_exits(self):
+        runner = make_runner([FakeCompleted(returncode=1)])
+        with self.assertRaises(SystemExit) as ctx:
+            g.resolve_repo(runner=runner)
+        self.assertIn("--all", str(ctx.exception))
+
+    def test_resolve_repo_non_github_exits(self):
+        runner = make_runner([FakeCompleted(
+            stdout="git@gitlab.com:acme/widget.git", returncode=0)])
+        with self.assertRaises(SystemExit):
+            g.resolve_repo(runner=runner)
+
+
 if __name__ == "__main__":
     unittest.main()
