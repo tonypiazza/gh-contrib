@@ -877,5 +877,26 @@ class TestAttribution(unittest.TestCase):
         self.assertEqual(g.attributed_files({"x": ["m"]}, ["y", "z"]), [])
 
 
+class TestSnapshotPaths(unittest.TestCase):
+    def test_state_dir_default(self):
+        self.assertEqual(g.state_dir(env={"HOME": "/Users/x"}),
+                         "/Users/x/.gh-contrib/state")
+
+    def test_state_dir_override(self):
+        self.assertEqual(
+            g.state_dir(env={"HOME": "/Users/x", "GH_CONTRIB_HOME": "/custom"}),
+            "/custom/state")
+
+    def test_snapshot_path_sanitizes_scope(self):
+        p = g.snapshot_path("repo:opensearch-project/data-prepper",
+                            env={"HOME": "/Users/x"})
+        self.assertEqual(
+            p, "/Users/x/.gh-contrib/state/repo-opensearch-project-data-prepper.json")
+
+    def test_snapshot_path_pr_scope(self):
+        p = g.snapshot_path("pr:o/r#7036", env={"HOME": "/Users/x"})
+        self.assertEqual(p, "/Users/x/.gh-contrib/state/pr-o-r-7036.json")
+
+
 if __name__ == "__main__":
     unittest.main()

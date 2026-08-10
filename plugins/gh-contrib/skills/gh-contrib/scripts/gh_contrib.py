@@ -246,6 +246,22 @@ def transcript_dir(cwd, env=None):
     return f"{base}/{slug}"
 
 
+SNAPSHOT_MAX_AGE_DAYS = 30  # older baseline -> suppress the "since last run" delta
+
+
+def state_dir(env=None):
+    """Directory holding per-scope snapshots. $GH_CONTRIB_HOME/state or ~/.gh-contrib/state."""
+    env = env if env is not None else os.environ
+    home = env.get("GH_CONTRIB_HOME") or (env.get("HOME", "") + "/.gh-contrib")
+    return f"{home}/state"
+
+
+def snapshot_path(scope_id, env=None):
+    """Filesystem path for a scope's snapshot (scope id sanitized for the filename)."""
+    safe = re.sub(r"[/:#]+", "-", scope_id)
+    return f"{state_dir(env=env)}/{safe}.json"
+
+
 _EDIT_TOOLS = ("Edit", "Write", "MultiEdit", "NotebookEdit")
 
 
