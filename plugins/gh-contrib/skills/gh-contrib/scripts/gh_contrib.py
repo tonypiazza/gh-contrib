@@ -307,6 +307,32 @@ def classify_court(item, now, stale_days=STALE_DAYS):
     return COURT_WAITING_ON_THEM
 
 
+def describe_pr_state(pr):
+    """Ordered human-readable status phrases for an enriched PR (pure).
+
+    Always returns at least one line.
+    """
+    lines = []
+    decision = pr.get("reviewDecision")
+    if decision == "CHANGES_REQUESTED" and not pr.get("addressed"):
+        lines.append("Changes requested — not yet addressed")
+    elif decision == "CHANGES_REQUESTED" and pr.get("addressed"):
+        lines.append("Changes addressed — awaiting re-review")
+    elif decision == "APPROVED":
+        lines.append("Approved — not yet merged")
+    else:  # None, REVIEW_REQUIRED, or any other value -> awaiting review
+        lines.append("Awaiting review")
+
+    if pr.get("mergeStateStatus") == "BEHIND":
+        lines.append("Base branch moved ahead — update/rebase needed")
+    if pr.get("mergeStateStatus") == "DIRTY" or pr.get("mergeable") == "CONFLICTING":
+        lines.append("Merge conflicts — resolve needed")
+
+    if pr.get("ciFailing"):
+        lines.append("CI failing on latest commit — check whether it's yours")
+    return lines
+
+
 def dedupe_by_url(items):
     """Drop duplicate items sharing a URL, preserving first-seen order."""
     seen = set()

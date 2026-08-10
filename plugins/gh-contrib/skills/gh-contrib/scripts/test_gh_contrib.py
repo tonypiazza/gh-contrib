@@ -553,5 +553,76 @@ class TestResolveCurrentPr(unittest.TestCase):
         self.assertIn("--author=@me", seen["args"])
 
 
+class TestDescribePrState(unittest.TestCase):
+    def test_unaddressed_changes_requested(self):
+        pr = {"kind": "pr", "reviewDecision": "CHANGES_REQUESTED",
+              "addressed": False, "mergeStateStatus": "BLOCKED",
+              "mergeable": "MERGEABLE", "ciFailing": False}
+        lines = g.describe_pr_state(pr)
+        self.assertTrue(any("not yet addressed" in l.lower() for l in lines))
+
+    def test_addressed_awaiting_rereview(self):
+        pr = {"kind": "pr", "reviewDecision": "CHANGES_REQUESTED",
+              "addressed": True, "mergeStateStatus": "BLOCKED",
+              "mergeable": "MERGEABLE", "ciFailing": False}
+        lines = g.describe_pr_state(pr)
+        self.assertTrue(any("re-review" in l.lower() for l in lines))
+
+    def test_approved(self):
+        pr = {"kind": "pr", "reviewDecision": "APPROVED",
+              "mergeStateStatus": "BLOCKED", "mergeable": "MERGEABLE",
+              "ciFailing": False}
+        lines = g.describe_pr_state(pr)
+        self.assertTrue(any("approved" in l.lower() for l in lines))
+
+    def test_awaiting_first_review(self):
+        pr = {"kind": "pr", "reviewDecision": None,
+              "mergeStateStatus": "BLOCKED", "mergeable": "MERGEABLE",
+              "ciFailing": False}
+        lines = g.describe_pr_state(pr)
+        self.assertTrue(any("awaiting review" in l.lower() for l in lines))
+
+    def test_behind_base(self):
+        pr = {"kind": "pr", "reviewDecision": "APPROVED",
+              "mergeStateStatus": "BEHIND", "mergeable": "MERGEABLE",
+              "ciFailing": False}
+        lines = g.describe_pr_state(pr)
+        self.assertTrue(any("base branch" in l.lower() for l in lines))
+
+    def test_conflicts(self):
+        pr = {"kind": "pr", "reviewDecision": "APPROVED",
+              "mergeStateStatus": "DIRTY", "mergeable": "CONFLICTING",
+              "ciFailing": False}
+        lines = g.describe_pr_state(pr)
+        self.assertTrue(any("conflict" in l.lower() for l in lines))
+
+    def test_ci_failing_is_hedged(self):
+        pr = {"kind": "pr", "reviewDecision": "APPROVED",
+              "mergeStateStatus": "BLOCKED", "mergeable": "MERGEABLE",
+              "ciFailing": True}
+        lines = g.describe_pr_state(pr)
+        joined = " ".join(lines).lower()
+        self.assertIn("ci failing", joined)
+        self.assertIn("whether", joined)  # hedged, not "your fault"
+
+    def test_review_required_is_awaiting_review(self):
+        pr = {"kind": "pr", "reviewDecision": "REVIEW_REQUIRED",
+              "mergeStateStatus": "BLOCKED", "mergeable": "MERGEABLE",
+              "ciFailing": False}
+        lines = g.describe_pr_state(pr)
+        self.assertEqual(len(lines), 1)
+        self.assertIn("awaiting review", lines[0].lower())
+
+    def test_multiple_signals_all_appear_in_order(self):
+        pr = {"kind": "pr", "reviewDecision": "CHANGES_REQUESTED",
+              "addressed": False, "mergeStateStatus": "BEHIND",
+              "mergeable": "MERGEABLE", "ciFailing": True}
+        lines = g.describe_pr_state(pr)
+        self.assertEqual(len(lines), 3)
+        self.assertIn("not yet addressed", lines[0].lower())
+        self.assertIn("base branch", lines[1].lower())
+        self.assertIn("ci failing", lines[2].lower())
+
+
 if __name__ == "__main__":
     unittest.main()
