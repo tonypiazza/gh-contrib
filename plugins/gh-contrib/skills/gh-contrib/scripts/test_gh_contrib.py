@@ -96,7 +96,7 @@ class TestResolveRepo(unittest.TestCase):
         runner = make_runner([FakeCompleted(returncode=1)])
         with self.assertRaises(SystemExit) as ctx:
             g.resolve_repo(runner=runner)
-        self.assertIn("--all", str(ctx.exception))
+        self.assertIn("not in a GitHub repository", str(ctx.exception))
 
     def test_resolve_repo_non_github_exits(self):
         runner = make_runner([FakeCompleted(

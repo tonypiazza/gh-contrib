@@ -122,7 +122,7 @@ def resolve_repo(runner=None):
     if not repo:
         sys.exit(
             "error: not in a GitHub repository (no GitHub 'origin' remote). "
-            "Use --all to query your configured cross-repo scope instead."
+            "Run this from inside a checkout of a repo you contribute to."
         )
     return repo
 
