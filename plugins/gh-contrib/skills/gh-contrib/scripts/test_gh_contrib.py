@@ -354,5 +354,44 @@ class TestEventOrderingSignals(unittest.TestCase):
         self.assertIsNone(g.last_author_commit_at(None))
 
 
+class TestExtractPrSignals(unittest.TestCase):
+    def _detail(self, **over):
+        d = {
+            "reviewDecision": "CHANGES_REQUESTED",
+            "mergeStateStatus": "BLOCKED",
+            "mergeable": "MERGEABLE",
+            "reviews": [
+                {"author": {"login": "maint"}, "state": "CHANGES_REQUESTED",
+                 "submittedAt": "2026-08-06T15:10:54Z"}],
+            "commits": [
+                {"committedDate": "2026-08-06T15:32:11Z"}],
+            "statusCheckRollup": [{"conclusion": "FAILURE"}],
+        }
+        d.update(over)
+        return d
+
+    def test_addressed_true_when_commit_after_cr(self):
+        s = g.extract_pr_signals(self._detail(), "me")
+        self.assertTrue(s["addressed"])  # commit 15:32 > CR 15:10
+
+    def test_addressed_false_when_no_commit_after_cr(self):
+        s = g.extract_pr_signals(
+            self._detail(commits=[{"committedDate": "2026-08-01T00:00:00Z"}]), "me")
+        self.assertFalse(s["addressed"])
+
+    def test_addressed_false_when_no_changes_requested(self):
+        s = g.extract_pr_signals(
+            self._detail(reviews=[], reviewDecision="APPROVED"), "me")
+        self.assertFalse(s["addressed"])  # nothing to address
+
+    def test_ci_failing_surfaced(self):
+        s = g.extract_pr_signals(self._detail(), "me")
+        self.assertTrue(s["ciFailing"])
+
+    def test_merge_state_surfaced(self):
+        s = g.extract_pr_signals(self._detail(mergeStateStatus="DIRTY"), "me")
+        self.assertEqual(s["mergeStateStatus"], "DIRTY")
+
+
 if __name__ == "__main__":
     unittest.main()

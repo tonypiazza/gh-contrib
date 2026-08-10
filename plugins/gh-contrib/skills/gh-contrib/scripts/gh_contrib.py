@@ -78,6 +78,28 @@ def last_author_commit_at(commits):
     return max(stamps) if stamps else None
 
 
+def extract_pr_signals(detail, me):
+    """Derive court-relevant signals from a raw `gh pr view --json` dict (pure).
+
+    `addressed` is True when the author pushed a commit AFTER the maintainer's
+    last CHANGES_REQUESTED review — the fix for GitHub's stale reviewDecision.
+    """
+    cr_at = last_changes_requested_at(detail.get("reviews"), me)
+    commit_at = last_author_commit_at(detail.get("commits"))
+    addressed = False
+    if cr_at and commit_at:
+        addressed = _parse_iso(commit_at) > _parse_iso(cr_at)
+    return {
+        "reviewDecision": detail.get("reviewDecision"),
+        "mergeStateStatus": detail.get("mergeStateStatus"),
+        "mergeable": detail.get("mergeable"),
+        "ciFailing": ci_failing_on_head(detail.get("statusCheckRollup")),
+        "changesRequestedAt": cr_at,
+        "authorActedAt": commit_at,
+        "addressed": addressed,
+    }
+
+
 def _default_runner(args):
     """Run `gh <args>` and return the CompletedProcess (check=True)."""
     return subprocess.run(["gh", *args], capture_output=True, text=True, check=True)
