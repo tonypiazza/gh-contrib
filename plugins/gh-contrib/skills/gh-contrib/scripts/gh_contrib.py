@@ -307,6 +307,25 @@ def fetch_items(repo, want_prs, want_issues, gh=run_gh):
     return dedupe_by_url(items)
 
 
+_PR_DETAIL_FIELDS = ("number,reviewDecision,mergeable,mergeStateStatus,"
+                     "updatedAt,isDraft,reviews,commits,statusCheckRollup")
+
+
+def enrich_item(item, repo, me, gh=run_gh):
+    """For a PR, fetch detail and merge court signals onto the item.
+
+    Issues have no reviews/CI/merge state, so they pass through unchanged.
+    """
+    if item.get("kind") != "pr":
+        return item
+    detail = gh([
+        "pr", "view", str(item["number"]), "--repo", repo,
+        "--json", _PR_DETAIL_FIELDS,
+    ])
+    item.update(extract_pr_signals(detail, me))
+    return item
+
+
 # court -> (glyph, text marker, section heading, rollup phrase)
 COURT_DISPLAY = {
     COURT_WAITING_ON_ME:   ("🔴", "[ME]",    "Waiting on me",     "waiting on you"),

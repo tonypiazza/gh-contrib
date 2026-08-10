@@ -470,5 +470,33 @@ class TestClassifyCourt(unittest.TestCase):
         self.assertEqual(g.classify_court(it, NOW), g.COURT_WAITING_ON_THEM)
 
 
+class TestEnrichItem(unittest.TestCase):
+    def test_pr_gets_signals_merged(self):
+        detail = {
+            "reviewDecision": "CHANGES_REQUESTED",
+            "mergeStateStatus": "BLOCKED", "mergeable": "MERGEABLE",
+            "reviews": [{"author": {"login": "maint"},
+                         "state": "CHANGES_REQUESTED",
+                         "submittedAt": "2026-08-06T15:10:54Z"}],
+            "commits": [{"committedDate": "2026-08-06T15:32:11Z"}],
+            "statusCheckRollup": [{"conclusion": "FAILURE"}],
+        }
+        item = {"kind": "pr", "number": 7036, "url": "u", "title": "t"}
+        out = g.enrich_item(item, "o/r", "me", gh=lambda args: detail)
+        self.assertTrue(out["addressed"])
+        self.assertTrue(out["ciFailing"])
+        self.assertEqual(out["reviewDecision"], "CHANGES_REQUESTED")
+
+    def test_issue_passthrough(self):
+        called = []
+        def gh(args):
+            called.append(args)
+            return {}
+        item = {"kind": "issue", "number": 10, "url": "u", "title": "t"}
+        out = g.enrich_item(item, "o/r", "me", gh=gh)
+        self.assertEqual(out, item)      # unchanged
+        self.assertEqual(called, [])     # no gh call for issues
+
+
 if __name__ == "__main__":
     unittest.main()
