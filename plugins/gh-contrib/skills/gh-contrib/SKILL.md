@@ -35,3 +35,12 @@ On error, relay the message and its fix; never fabricate a digest.
 - The command file's bash fence uses `${CLAUDE_PLUGIN_ROOT}` and `$ARGUMENTS`.
 - The skill file's bash fence uses `${CLAUDE_SKILL_DIR}`.
 - Note the skills directory `plugins/gh-contrib/skills/gh-contrib/` already exists (it contains scripts/). The commands directory `plugins/gh-contrib/commands/` does NOT exist yet — create it.
+
+## AI-authored files
+
+The AI-authored file list (with model) is a learning aid: where to focus review of
+AI-generated code, and which model wrote it. When it flags files on a problematic PR
+and you're in a local checkout, offer to read those files' diffs and explain the
+likely defect and a fix. Attribution is file-level (the model edited the file) — flag
+where to look and which model, don't assert a specific line is the bug, and never
+frame the maintainer's request as the user's fault.
