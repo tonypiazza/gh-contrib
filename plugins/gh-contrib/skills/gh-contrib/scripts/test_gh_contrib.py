@@ -1119,5 +1119,77 @@ class TestRenderDelta(unittest.TestCase):
         self.assertLess(out.index("uf"), out.index("pull/9"))
 
 
+class TestRunDelta(unittest.TestCase):
+    def test_first_run_saves_and_reports_first(self):
+        store = {}
+        writer = lambda p, t: store.__setitem__(p, t)
+        reader = lambda p: store[p]  # raises KeyError first time
+        items = [{"kind": "pr", "number": 1, "title": "A", "url": "u1",
+                  "court": g.COURT_WAITING_ON_ME}]
+        now = _dt.datetime(2026, 8, 10, tzinfo=_dt.timezone.utc)
+        delta, gone = g.run_delta("repo:o/r", items, "o/r", now,
+                                  env={"HOME": "/h"}, reader=reader,
+                                  writer=writer, gh=lambda a: {})
+        self.assertEqual(delta["baseline"], "first")
+        self.assertEqual(gone, [])
+        self.assertTrue(any("repo-o-r.json" in p for p in store))
+
+    def test_second_run_detects_merge(self):
+        store = {}
+        writer = lambda p, t: store.__setitem__(p, t)
+        reader = lambda p: store[p]
+        now1 = _dt.datetime(2026, 8, 9, tzinfo=_dt.timezone.utc)
+        first = [{"kind": "pr", "number": 1, "title": "A",
+                  "url": "https://github.com/o/r/pull/1",
+                  "court": g.COURT_WAITING_ON_THEM}]
+        g.run_delta("repo:o/r", first, "o/r", now1, env={"HOME": "/h"},
+                    reader=reader, writer=writer, gh=lambda a: {})
+        now2 = _dt.datetime(2026, 8, 10, tzinfo=_dt.timezone.utc)
+        delta, gone = g.run_delta("repo:o/r", [], "o/r", now2,
+                                  env={"HOME": "/h"}, reader=reader,
+                                  writer=writer, gh=lambda a: {"state": "MERGED"})
+        self.assertEqual(delta["gone"], ["https://github.com/o/r/pull/1"])
+        self.assertEqual(gone[0]["state"], "MERGED")
+
+    def test_court_label_maps_constant_to_phrase(self):
+        self.assertEqual(g._court_label(g.COURT_WAITING_ON_ME), "Waiting on me")
+        self.assertEqual(g._court_label("BOGUS"), "BOGUS")  # unknown -> raw
+
+    def test_court_flip_detected_across_runs(self):
+        store = {}
+        writer = lambda p, t: store.__setitem__(p, t)
+        reader = lambda p: store[p]
+        url = "https://github.com/o/r/pull/1"
+        now1 = _dt.datetime(2026, 8, 9, tzinfo=_dt.timezone.utc)
+        run1_items = [{"kind": "pr", "number": 1, "title": "A", "url": url,
+                       "court": g.COURT_WAITING_ON_THEM}]
+        g.run_delta("repo:o/r", run1_items, "o/r", now1, env={"HOME": "/h"},
+                    reader=reader, writer=writer, gh=lambda a: {})
+        now2 = _dt.datetime(2026, 8, 10, tzinfo=_dt.timezone.utc)
+        run2_items = [{"kind": "pr", "number": 1, "title": "A", "url": url,
+                       "court": g.COURT_WAITING_ON_ME}]  # flipped
+        delta, gone = g.run_delta("repo:o/r", run2_items, "o/r", now2,
+                                  env={"HOME": "/h"}, reader=reader,
+                                  writer=writer, gh=lambda a: {})
+        self.assertEqual(delta["court_changed"],
+                         [{"url": url, "from": g.COURT_WAITING_ON_THEM,
+                           "to": g.COURT_WAITING_ON_ME}])
+        self.assertEqual(gone, [])
+
+    def test_first_run_makes_no_gh_call(self):
+        store = {}
+        writer = lambda p, t: store.__setitem__(p, t)
+        reader = lambda p: store[p]
+        def gh(a):
+            raise AssertionError("gh should not be called on a first run")
+        now = _dt.datetime(2026, 8, 10, tzinfo=_dt.timezone.utc)
+        items = [{"kind": "pr", "number": 1, "title": "A", "url": "u1",
+                  "court": g.COURT_WAITING_ON_ME}]
+        delta, gone = g.run_delta("repo:o/r", items, "o/r", now,
+                                  env={"HOME": "/h"}, reader=reader,
+                                  writer=writer, gh=gh)
+        self.assertEqual(delta["baseline"], "first")
+
+
 if __name__ == "__main__":
     unittest.main()

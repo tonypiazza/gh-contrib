@@ -302,7 +302,7 @@ def load_snapshot(scope_id, reader=None, env=None):
     try:
         text = reader(snapshot_path(scope_id, env=env))
         data = json.loads(text)
-    except (OSError, ValueError, TypeError):
+    except (OSError, ValueError, TypeError, KeyError):
         return None, None
     if not isinstance(data, dict):
         return None, None
@@ -356,6 +356,25 @@ def resolve_gone_states(gone_urls, previous, repo, gh=run_gh, cap=20):
             "title": rec.get("title"), "state": detail.get("state"),
         })
     return out
+
+
+def run_delta(scope_id, items, repo, now, env=None, reader=None, writer=None,
+              gh=run_gh):
+    """Load prior snapshot, compute delta, resolve gone states, save new snapshot.
+
+    Returns (delta, gone_states). The snapshot is saved here (successful path).
+    """
+    previous, prev_time = load_snapshot(scope_id, reader=reader, env=env)
+    current = fingerprint(items)
+    delta = compute_delta(previous, current, now, prev_time)
+    gone_states = []
+    if delta["baseline"] == "ok" and delta["gone"] and previous:  # previous: defensive
+        gone_states = resolve_gone_states(delta["gone"], previous, repo, gh=gh)
+    try:
+        save_snapshot(scope_id, items, now, writer=writer, env=env)
+    except OSError:
+        pass  # best-effort: a failed baseline refresh must not drop the report
+    return delta, gone_states
 
 
 _EDIT_TOOLS = ("Edit", "Write", "MultiEdit", "NotebookEdit")
@@ -705,6 +724,12 @@ def render_pr_detail(repo, pr, others, glyphs=True):
     return "\n".join(lines) + "\n"
 
 
+def _court_label(court):
+    """Human-readable heading for a court constant (falls back to the raw value)."""
+    entry = COURT_DISPLAY.get(court)
+    return entry[2] if entry else court
+
+
 def render_delta(delta, gone_states, glyphs=True):
     """Render the leading 'What changed since last run' block (pure).
 
@@ -737,7 +762,7 @@ def render_delta(delta, gone_states, glyphs=True):
     for c in closed:
         lines.append(f"- ⚫ Closed: #{c['number']} {c['title']}")
     for f in flips:
-        arrow = f"{f['from']} → {f['to']}"
+        arrow = f"{_court_label(f['from'])} → {_court_label(f['to'])}"
         lines.append(f"- ↔ Court changed ({arrow}): {f['url']}")
     for u in new:
         lines.append(f"- ✨ New: {u}")
@@ -825,11 +850,17 @@ def main(argv=None):
             pr["aiAuthoredFiles"] = attributed_files(
                 touched, pr_changed_files(repo, pr["number"]))
             others = other_prs_needing_attention(repo, me, pr["number"], now)
+            delta, gone_states = run_delta(
+                f"pr:{repo}#{pr['number']}", [pr], repo, now)
             if ns.json:
                 print(json.dumps({"repo": repo, "currentPr": pr,
-                                  "othersNeedingAttention": others}, indent=2))
+                                  "othersNeedingAttention": others,
+                                  "delta": delta}, indent=2))
                 return
-            print(render_pr_detail(repo, pr, others, glyphs=not ns.no_glyphs))
+            delta_block = render_delta(delta, gone_states,
+                                       glyphs=not ns.no_glyphs)
+            print(delta_block + "\n"
+                  + render_pr_detail(repo, pr, others, glyphs=not ns.no_glyphs))
             return
         if len(prs) > 1:
             refs = ", ".join(f"#{p['number']}" for p in prs)
@@ -843,10 +874,13 @@ def main(argv=None):
         enrich_item(it, repo, me)
         it["court"] = classify_court(it, now)
 
+    delta, gone_states = run_delta(f"repo:{repo}", items, repo, now)
     if ns.json:
-        print(json.dumps({"repo": repo, "items": items}, indent=2))
+        print(json.dumps({"repo": repo, "items": items, "delta": delta},
+                         indent=2))
         return
-    print(render_dense(repo, items, glyphs=not ns.no_glyphs))
+    delta_block = render_delta(delta, gone_states, glyphs=not ns.no_glyphs)
+    print(delta_block + "\n" + render_dense(repo, items, glyphs=not ns.no_glyphs))
 
 
 if __name__ == "__main__":
