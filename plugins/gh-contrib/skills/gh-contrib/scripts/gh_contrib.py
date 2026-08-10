@@ -191,5 +191,48 @@ def fetch_items(repo, want_prs, want_issues, gh=run_gh):
     return dedupe_by_url(items)
 
 
+# court -> (glyph, text marker, section heading, rollup phrase)
+COURT_DISPLAY = {
+    COURT_WAITING_ON_ME:   ("🔴", "[ME]",    "Waiting on me",     "waiting on you"),
+    COURT_STALE_NUDGE:     ("🟡", "[NUDGE]", "Nudge candidates",  "to nudge"),
+    COURT_WAITING_ON_THEM: ("🟢", "[THEM]",  "Waiting on them",   "waiting on them"),
+    COURT_QUIET:           ("⚪", "[quiet]", "Quiet",             "quiet"),
+}
+COURT_ORDER = [
+    COURT_WAITING_ON_ME, COURT_STALE_NUDGE, COURT_WAITING_ON_THEM, COURT_QUIET,
+]
+
+
+def _marker(court, glyphs):
+    glyph, text, _, _ = COURT_DISPLAY[court]
+    return glyph if glyphs else text
+
+
+def render_dense(repo, items, glyphs=True):
+    """Render items as a dense, court-grouped markdown digest string."""
+    if not items:
+        return f"**{repo}** — Nothing open of yours here.\n"
+
+    by_court = {c: [] for c in COURT_ORDER}
+    for it in items:
+        by_court.get(it.get("court"), by_court[COURT_QUIET]).append(it)
+
+    rollup = " · ".join(
+        f"{len(by_court[c])} {COURT_DISPLAY[c][3]}"
+        for c in COURT_ORDER if by_court[c]
+    )
+    lines = [f"**{repo}** — {rollup}", ""]
+    for court in COURT_ORDER:
+        group = by_court[court]
+        if not group:
+            continue
+        lines.append(f"## {COURT_DISPLAY[court][2]}")
+        for it in group:
+            marker = _marker(court, glyphs)
+            lines.append(f"- {marker} {it['title']} · #{it['number']} · {it['url']}")
+        lines.append("")
+    return "\n".join(lines)
+
+
 if __name__ == "__main__":  # pragma: no cover - wired up in Task 6
     pass

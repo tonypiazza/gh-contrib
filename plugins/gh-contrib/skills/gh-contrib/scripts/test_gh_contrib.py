@@ -168,5 +168,62 @@ class TestFetchItems(unittest.TestCase):
         self.assertEqual(out, [])
 
 
+class TestRenderDense(unittest.TestCase):
+    def _items(self):
+        return [
+            {"kind": "pr", "number": 7036, "title": "rss rewrite",
+             "url": "https://github.com/o/r/pull/7036",
+             "court": g.COURT_WAITING_ON_THEM},
+            {"kind": "issue", "number": 10, "title": "RFC MQTT",
+             "url": "https://github.com/o/r/issues/10",
+             "court": g.COURT_WAITING_ON_THEM},
+        ]
+
+    def test_rollup_line_present(self):
+        out = g.render_dense("o/r", self._items(), glyphs=True)
+        self.assertIn("2 waiting on them", out)
+
+    def test_glyph_marker_used_by_default(self):
+        out = g.render_dense("o/r", self._items(), glyphs=True)
+        self.assertIn("🟢", out)
+
+    def test_text_marker_when_glyphs_off(self):
+        out = g.render_dense("o/r", self._items(), glyphs=False)
+        self.assertIn("[THEM]", out)
+        self.assertNotIn("🟢", out)
+
+    def test_titles_and_numbers_render(self):
+        out = g.render_dense("o/r", self._items(), glyphs=True)
+        self.assertIn("rss rewrite", out)
+        self.assertIn("#7036", out)
+
+    def test_empty_is_stated_plainly(self):
+        out = g.render_dense("o/r", [], glyphs=True)
+        self.assertIn("Nothing open", out)
+
+    def test_unknown_court_falls_into_quiet(self):
+        items = [{"kind": "pr", "number": 1, "title": "mystery",
+                  "url": "u", "court": "BOGUS"}]
+        out = g.render_dense("o/r", items, glyphs=True)
+        self.assertIn("## Quiet", out)
+        self.assertIn("mystery", out)
+
+    def test_missing_court_key_falls_into_quiet(self):
+        items = [{"kind": "pr", "number": 1, "title": "keyless", "url": "u"}]
+        out = g.render_dense("o/r", items, glyphs=True)
+        self.assertIn("## Quiet", out)
+        self.assertIn("keyless", out)
+
+    def test_sections_ordered_me_before_them(self):
+        items = [
+            {"kind": "pr", "number": 2, "title": "theirs", "url": "u2",
+             "court": g.COURT_WAITING_ON_THEM},
+            {"kind": "pr", "number": 1, "title": "mine", "url": "u1",
+             "court": g.COURT_WAITING_ON_ME},
+        ]
+        out = g.render_dense("o/r", items, glyphs=True)
+        self.assertLess(out.index("Waiting on me"), out.index("Waiting on them"))
+
+
 if __name__ == "__main__":
     unittest.main()
