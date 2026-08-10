@@ -278,5 +278,35 @@ class TestCanonicalRepo(unittest.TestCase):
         )
 
 
+class TestCiAndTime(unittest.TestCase):
+    def test_parse_iso_roundtrip(self):
+        dt = g._parse_iso("2026-08-06T15:10:54Z")
+        self.assertEqual(dt.year, 2026)
+        self.assertEqual(dt.hour, 15)
+        self.assertIsNotNone(dt.tzinfo)
+
+    def test_parse_iso_none(self):
+        self.assertIsNone(g._parse_iso(None))
+        self.assertIsNone(g._parse_iso(""))
+
+    def test_ci_failing_true_on_failure(self):
+        rollup = [{"conclusion": "SUCCESS"}, {"conclusion": "FAILURE"},
+                  {"conclusion": "CANCELLED"}]
+        self.assertTrue(g.ci_failing_on_head(rollup))
+
+    def test_ci_failing_false_without_failure(self):
+        rollup = [{"conclusion": "SUCCESS"}, {"conclusion": "CANCELLED"},
+                  {"conclusion": "SKIPPED"}, {"conclusion": "NEUTRAL"}]
+        self.assertFalse(g.ci_failing_on_head(rollup))
+
+    def test_ci_failing_statuscontext_state(self):
+        rollup = [{"state": "FAILURE"}]
+        self.assertTrue(g.ci_failing_on_head(rollup))
+
+    def test_ci_failing_empty(self):
+        self.assertFalse(g.ci_failing_on_head([]))
+        self.assertFalse(g.ci_failing_on_head(None))
+
+
 if __name__ == "__main__":
     unittest.main()

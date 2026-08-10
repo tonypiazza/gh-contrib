@@ -17,6 +17,7 @@ import re
 import subprocess
 import sys
 import time
+from datetime import datetime, timezone
 
 # gh/GitHub errors worth retrying (transient) vs. failing fast (fatal).
 TRANSIENT_PATTERN = re.compile(
@@ -31,6 +32,28 @@ FATAL_PATTERN = re.compile(
     re.IGNORECASE,
 )
 MAX_ATTEMPTS = 3
+STALE_DAYS = 14  # Phase 2 default; Phase 4 makes this configurable.
+
+
+def _parse_iso(ts):
+    """Parse a GitHub ISO-8601 'Z' timestamp into an aware UTC datetime, or None."""
+    if not ts:
+        return None
+    return datetime.strptime(ts, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
+
+
+def ci_failing_on_head(rollup):
+    """True iff any check in the statusCheckRollup has a FAILURE result.
+
+    `gh pr view`'s statusCheckRollup already reflects the head commit's checks.
+    CheckRun items carry `conclusion`; StatusContext items carry `state`.
+    CANCELLED/SKIPPED/NEUTRAL are not failures (CANCELLED is CI noise).
+    """
+    for check in rollup or []:
+        result = check.get("conclusion") or check.get("state")
+        if result == "FAILURE":
+            return True
+    return False
 
 
 def _default_runner(args):
