@@ -56,8 +56,8 @@ by whose court the ball is in:
 - **Waiting on me** — a maintainer requested changes you haven't addressed yet, or the
   base branch moved and your PR is now behind/conflicting.
 - **CI suspect** — checks are failing on your latest commit. Flagged as worth a look; the
-  plugin does not yet judge whether the failure is caused by your change (that comes with
-  AI attribution in a later version).
+  plugin does not assert the failure is your fault — see AI attribution below for which
+  files (and which model) wrote the code under review.
 - **Nudge candidates** — no activity for a while; a good candidate to ping.
 - **Waiting on them** — you've responded or pushed since the last review, the PR is
   approved but unmerged, or an RFC is awaiting maintainer engagement.
@@ -71,9 +71,19 @@ working on and includes a one-line footer for any of your *other* open PRs that
 currently need attention. That footer reflects each PR's current state; a true
 "what changed since last run" view comes with the history/snapshot work later.
 
-Arriving in later versions: AI attribution (which failing files are AI-authored, and
-suggested fixes), org/all breadth across many repos, the "what changed since last run"
-delta, and the setup/history commands.
+**AI attribution.** In current-PR mode the plugin identifies which of the PR's changed
+files were AI-authored — and by which model — by reading this machine's local Claude Code
+session history. It's a **learning aid, not a blame list**: use it to see where to review
+AI-generated code more carefully, and to judge whether the right model was used for the
+work (if feedback keeps landing on a weaker model's output, a stronger one may fit
+better). In a local checkout you can ask it to read those files' diffs and suggest fixes.
+Attribution is file-level (which files the model edited, from local history) — it flags
+where to look and which model, not that a specific line is the bug, and it never frames a
+maintainer's request as your fault. This relies on the single-machine-per-repo assumption
+above; code pasted manually from chat isn't captured.
+
+Arriving in later versions: org/all breadth across many repos, the "what changed since
+last run" delta, and the setup/history commands.
 
 ## License
 
