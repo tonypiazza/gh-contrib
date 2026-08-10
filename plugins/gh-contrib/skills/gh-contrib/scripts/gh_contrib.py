@@ -298,6 +298,25 @@ def claude_touched_files(cwd, opener=None, lister=None, env=None):
     return {path: sorted(models) for path, models in touched.items()}
 
 
+def pr_changed_files(repo, number, gh=run_gh):
+    """Repo-relative paths of a PR's changed files."""
+    detail = gh(["pr", "view", str(number), "--repo", repo, "--json", "files"])
+    return [f["path"] for f in (detail.get("files") or [])]
+
+
+def attributed_files(touched, changed):
+    """Changed files that Claude touched, with their model(s) (pure).
+
+    `touched` is the {path: [models]} map from claude_touched_files. Returns a
+    sorted list of {"path", "models"} for each changed file present in the map.
+    """
+    return [
+        {"path": p, "models": touched[p]}
+        for p in sorted(changed)
+        if p in touched
+    ]
+
+
 def resolve_login(runner=None):
     """Return the authenticated user's login (for excluding their own reviews).
 

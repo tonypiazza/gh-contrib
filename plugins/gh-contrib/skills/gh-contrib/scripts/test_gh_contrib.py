@@ -833,5 +833,26 @@ class TestClaudeTouchedFiles(unittest.TestCase):
         self.assertEqual(out, {})
 
 
+class TestAttribution(unittest.TestCase):
+    def test_pr_changed_files(self):
+        detail = {"files": [{"path": "a/b.java"}, {"path": "c/d.md"}]}
+        out = g.pr_changed_files("o/r", 7036, gh=lambda args: detail)
+        self.assertEqual(out, ["a/b.java", "c/d.md"])
+
+    def test_attributed_carries_models_sorted(self):
+        touched = {"a/b.java": ["claude-opus-4-8"],
+                   "z/other.java": ["claude-opus-4-8"],
+                   "c/d.md": ["claude-opus-4-8", "claude-sonnet-4-6"]}
+        changed = ["c/d.md", "a/b.java", "e/f.py"]
+        self.assertEqual(g.attributed_files(touched, changed), [
+            {"path": "a/b.java", "models": ["claude-opus-4-8"]},
+            {"path": "c/d.md",
+             "models": ["claude-opus-4-8", "claude-sonnet-4-6"]},
+        ])
+
+    def test_attributed_empty_when_disjoint(self):
+        self.assertEqual(g.attributed_files({"x": ["m"]}, ["y", "z"]), [])
+
+
 if __name__ == "__main__":
     unittest.main()
