@@ -1008,5 +1008,42 @@ class TestComputeDelta(unittest.TestCase):
         self.assertEqual((d["new"], d["gone"]), ([], []))
 
 
+class TestResolveGoneStates(unittest.TestCase):
+    def test_merged_and_closed(self):
+        previous = {
+            "https://github.com/o/r/pull/1": {"number": 1, "kind": "pr",
+                                              "title": "merged one"},
+            "https://github.com/o/r/issues/2": {"number": 2, "kind": "issue",
+                                                "title": "closed one"},
+        }
+        def gh(args):
+            num = next(a for a in args if a.isdigit())
+            return {"1": {"state": "MERGED"}, "2": {"state": "CLOSED"}}[num]
+        out = g.resolve_gone_states(list(previous.keys()), previous, "o/r", gh=gh)
+        by_num = {r["number"]: r for r in out}
+        self.assertEqual(by_num[1]["state"], "MERGED")
+        self.assertEqual(by_num[1]["title"], "merged one")
+        self.assertEqual(by_num[1]["kind"], "pr")
+        self.assertEqual(by_num[2]["state"], "CLOSED")
+
+    def test_cap_limits_calls(self):
+        previous = {f"u{i}": {"number": i, "kind": "pr", "title": f"t{i}"}
+                    for i in range(5)}
+        calls = []
+        def gh(args):
+            calls.append(args)
+            return {"state": "MERGED"}
+        out = g.resolve_gone_states(list(previous.keys()), previous, "o/r",
+                                    gh=gh, cap=2)
+        self.assertEqual(len(out), 2)
+        self.assertEqual(len(calls), 2)
+
+    def test_skips_entry_without_number(self):
+        previous = {"u1": {"kind": "pr", "title": "no number"}}
+        out = g.resolve_gone_states(["u1"], previous, "o/r",
+                                    gh=lambda a: {"state": "MERGED"})
+        self.assertEqual(out, [])
+
+
 if __name__ == "__main__":
     unittest.main()

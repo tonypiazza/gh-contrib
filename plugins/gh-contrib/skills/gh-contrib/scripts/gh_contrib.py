@@ -336,6 +336,28 @@ def compute_delta(previous, current, now, prev_time,
             "court_changed": court_changed, "gone": sorted(gone)}
 
 
+def resolve_gone_states(gone_urls, previous, repo, gh=run_gh, cap=20):
+    """Re-fetch terminal state (MERGED/CLOSED) for items gone from the open set.
+
+    Bounded by `cap` re-fetches per run to keep cost sane; extras are skipped
+    (the caller may note truncation). Entries lacking a number are skipped.
+    """
+    out = []
+    for url in gone_urls[:cap]:
+        rec = previous.get(url) or {}
+        number = rec.get("number")
+        if number is None:
+            continue
+        kind = rec.get("kind")
+        sub = "issue" if kind == "issue" else "pr"
+        detail = gh([sub, "view", str(number), "--repo", repo, "--json", "state"])
+        out.append({
+            "url": url, "number": number, "kind": kind,
+            "title": rec.get("title"), "state": detail.get("state"),
+        })
+    return out
+
+
 _EDIT_TOOLS = ("Edit", "Write", "MultiEdit", "NotebookEdit")
 
 
