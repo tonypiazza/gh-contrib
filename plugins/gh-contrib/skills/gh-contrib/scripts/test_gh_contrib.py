@@ -519,5 +519,39 @@ class TestCurrentBranch(unittest.TestCase):
         self.assertIsNone(g.current_branch(runner=runner))
 
 
+class TestResolveCurrentPr(unittest.TestCase):
+    def test_one_pr(self):
+        raw = [{"number": 7036, "title": "rss rewrite",
+                "url": "https://github.com/o/r/pull/7036",
+                "createdAt": "2026-07-28T00:00:00Z",
+                "updatedAt": "2026-08-06T00:00:00Z"}]
+        prs = g.resolve_current_pr("o/r", "rss-source-rewrite",
+                                   gh=lambda args: raw)
+        self.assertEqual(len(prs), 1)
+        self.assertEqual(prs[0]["number"], 7036)
+        self.assertEqual(prs[0]["kind"], "pr")
+
+    def test_none(self):
+        prs = g.resolve_current_pr("o/r", "main", gh=lambda args: [])
+        self.assertEqual(prs, [])
+
+    def test_many(self):
+        raw = [{"number": 1, "title": "a", "url": "u1",
+                "createdAt": "x", "updatedAt": "y"},
+               {"number": 2, "title": "b", "url": "u2",
+                "createdAt": "x", "updatedAt": "y"}]
+        prs = g.resolve_current_pr("o/r", "shared-branch", gh=lambda args: raw)
+        self.assertEqual([p["number"] for p in prs], [1, 2])
+
+    def test_passes_head_and_author(self):
+        seen = {}
+        def gh(args):
+            seen["args"] = args
+            return []
+        g.resolve_current_pr("o/r", "my-branch", gh=gh)
+        self.assertIn("--head=my-branch", seen["args"])
+        self.assertIn("--author=@me", seen["args"])
+
+
 if __name__ == "__main__":
     unittest.main()

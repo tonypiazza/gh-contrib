@@ -362,6 +362,20 @@ def enrich_item(item, repo, me, gh=run_gh):
     return item
 
 
+def resolve_current_pr(repo, branch, gh=run_gh):
+    """Return the user's open PRs in `repo` whose head branch is `branch`.
+
+    Normally length 0 (branch has no PR of yours) or 1. Length >1 is rare
+    (multiple open PRs sharing a head branch) and handled by the caller.
+    """
+    raw = gh([
+        "pr", "list", f"--repo={repo}", f"--head={branch}",
+        "--author=@me", "--state=open",
+        "--json", "number,title,url,createdAt,updatedAt",
+    ])
+    return [normalize_item(p, kind="pr") for p in raw]
+
+
 # court -> (glyph, text marker, section heading, rollup phrase)
 COURT_DISPLAY = {
     COURT_WAITING_ON_ME:   ("🔴", "[ME]",    "Waiting on me",     "waiting on you"),
