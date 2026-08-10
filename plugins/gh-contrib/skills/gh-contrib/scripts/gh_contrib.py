@@ -211,6 +211,22 @@ def canonical_repo(repo, gh=run_gh):
     return repo
 
 
+def resolve_login(runner=None):
+    """Return the authenticated user's login (for excluding their own reviews).
+
+    Uses a raw subprocess call (not run_gh): `gh api user --jq .login` emits a
+    bare word, not JSON, so it must not go through run_gh's json parsing.
+    """
+    def _default(args):
+        import subprocess as _sp
+        return _sp.run(args, capture_output=True, text=True)
+
+    proc = (runner or _default)(["gh", "api", "user", "--jq", ".login"])
+    if proc.returncode != 0:
+        sys.exit("error: could not determine the authenticated gh user.")
+    return (proc.stdout or "").strip()
+
+
 COURT_WAITING_ON_ME = "WAITING_ON_ME"
 COURT_WAITING_ON_THEM = "WAITING_ON_THEM"
 COURT_STALE_NUDGE = "STALE_NUDGE"
@@ -427,10 +443,13 @@ def main(argv=None):
         sys.exit("error: --rich is not available yet (later phase).")
 
     repo = canonical_repo(resolve_repo())
+    me = resolve_login()
     want_prs, want_issues = resolve_types(ns)
     items = fetch_items(repo, want_prs, want_issues)
+    now = datetime.now(timezone.utc)
     for it in items:
-        it["court"] = classify_court(it)
+        enrich_item(it, repo, me)
+        it["court"] = classify_court(it, now)
 
     if ns.json:
         print(json.dumps({"repo": repo, "items": items}, indent=2))

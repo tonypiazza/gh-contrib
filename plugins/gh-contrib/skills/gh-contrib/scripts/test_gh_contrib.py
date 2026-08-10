@@ -498,5 +498,11 @@ class TestEnrichItem(unittest.TestCase):
         self.assertEqual(called, [])     # no gh call for issues
 
 
+class TestResolveLogin(unittest.TestCase):
+    def test_returns_login(self):
+        runner = make_runner([FakeCompleted(stdout="tonypiazza\n", returncode=0)])
+        self.assertEqual(g.resolve_login(runner=runner), "tonypiazza")
+
+
 if __name__ == "__main__":
     unittest.main()
