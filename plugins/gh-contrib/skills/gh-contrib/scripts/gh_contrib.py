@@ -127,6 +127,23 @@ def resolve_repo(runner=None):
     return repo
 
 
+def canonical_repo(repo, gh=run_gh):
+    """Resolve a fork to its upstream parent 'owner/name'.
+
+    External contributors' origin is usually their fork; their PRs/issues live
+    on the upstream repo they forked from. Ask GitHub for the parent and use it
+    when `repo` is a fork; otherwise return `repo` unchanged.
+    """
+    info = gh(["repo", "view", repo, "--json", "isFork,parent"])
+    if info.get("isFork") and info.get("parent"):
+        parent = info["parent"]
+        owner = (parent.get("owner") or {}).get("login")
+        name = parent.get("name")
+        if owner and name:
+            return f"{owner}/{name}"
+    return repo
+
+
 COURT_WAITING_ON_ME = "WAITING_ON_ME"
 COURT_WAITING_ON_THEM = "WAITING_ON_THEM"
 COURT_STALE_NUDGE = "STALE_NUDGE"
@@ -234,5 +251,72 @@ def render_dense(repo, items, glyphs=True):
     return "\n".join(lines)
 
 
-if __name__ == "__main__":  # pragma: no cover - wired up in Task 6
-    pass
+def build_parser():
+    p = argparse.ArgumentParser(
+        prog="gh_contrib.py",
+        description="Track your own GitHub PRs/issues via the gh CLI.",
+    )
+    # Scope flags (mutually exclusive; validated in validate_flags).
+    p.add_argument("--repo", action="store_true",
+                   help="whole current repo (Level 1)")
+    p.add_argument("--org", nargs="?", const=True, default=None,
+                   help="current repo's org, or a named org (Level 2) [later phase]")
+    p.add_argument("--all", action="store_true",
+                   help="configured digest scope (Level 3) [later phase]")
+    # Type filters.
+    p.add_argument("--issues", action="store_true", help="issues only")
+    p.add_argument("--prs", action="store_true", help="PRs only")
+    # Output.
+    p.add_argument("--rich", action="store_true",
+                   help="per-item reasoning [later phase]")
+    p.add_argument("--json", action="store_true", help="raw JSON output")
+    p.add_argument("--no-glyphs", action="store_true",
+                   help="ASCII court markers instead of emoji")
+    return p
+
+
+def validate_flags(ns):
+    """Reject incoherent flag combinations with a clear message."""
+    scope_flags = [bool(ns.repo), ns.org is not None, bool(ns.all)]
+    if sum(scope_flags) > 1:
+        sys.exit("error: choose at most one scope flag (--repo, --org, --all).")
+    if ns.issues and ns.prs:
+        sys.exit("error: --issues and --prs are mutually exclusive.")
+    if ns.rich and ns.json:
+        sys.exit("error: --rich and --json are mutually exclusive.")
+    return ns
+
+
+def resolve_types(ns):
+    """Return (want_prs, want_issues). No type flag -> both."""
+    if ns.issues:
+        return (False, True)
+    if ns.prs:
+        return (True, False)
+    return (True, True)
+
+
+def main(argv=None):
+    ns = validate_flags(build_parser().parse_args(argv))
+
+    # Phase 1 supports Level 1 only. --org/--all arrive in Phase 4.
+    if ns.org is not None or ns.all:
+        sys.exit("error: --org and --all are not available yet (later phase). "
+                 "Use --repo for the current repository.")
+    if ns.rich:
+        sys.exit("error: --rich is not available yet (later phase).")
+
+    repo = canonical_repo(resolve_repo())
+    want_prs, want_issues = resolve_types(ns)
+    items = fetch_items(repo, want_prs, want_issues)
+    for it in items:
+        it["court"] = classify_court(it)
+
+    if ns.json:
+        print(json.dumps({"repo": repo, "items": items}, indent=2))
+        return
+    print(render_dense(repo, items, glyphs=not ns.no_glyphs))
+
+
+if __name__ == "__main__":
+    main()

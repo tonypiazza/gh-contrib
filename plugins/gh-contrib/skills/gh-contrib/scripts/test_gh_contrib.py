@@ -225,5 +225,58 @@ class TestRenderDense(unittest.TestCase):
         self.assertLess(out.index("Waiting on me"), out.index("Waiting on them"))
 
 
+class TestArgParsing(unittest.TestCase):
+    def test_issues_and_prs_together_rejected(self):
+        with self.assertRaises(SystemExit):
+            g.validate_flags(g.build_parser().parse_args(["--issues", "--prs"]))
+
+    def test_two_scope_flags_rejected(self):
+        with self.assertRaises(SystemExit):
+            g.validate_flags(g.build_parser().parse_args(["--repo", "--all"]))
+
+    def test_rich_and_json_rejected(self):
+        with self.assertRaises(SystemExit):
+            g.validate_flags(g.build_parser().parse_args(["--rich", "--json"]))
+
+    def test_default_wants_both_types(self):
+        ns = g.build_parser().parse_args([])
+        want_prs, want_issues = g.resolve_types(ns)
+        self.assertTrue(want_prs and want_issues)
+
+    def test_issues_only(self):
+        ns = g.build_parser().parse_args(["--issues"])
+        want_prs, want_issues = g.resolve_types(ns)
+        self.assertEqual((want_prs, want_issues), (False, True))
+
+
+class TestCanonicalRepo(unittest.TestCase):
+    def test_fork_resolves_to_parent(self):
+        def gh(args):
+            return {"isFork": True,
+                    "parent": {"name": "data-prepper",
+                               "owner": {"login": "opensearch-project"}}}
+        self.assertEqual(
+            g.canonical_repo("tonypiazza/data-prepper", gh=gh),
+            "opensearch-project/data-prepper",
+        )
+
+    def test_non_fork_returns_input(self):
+        def gh(args):
+            return {"isFork": False, "parent": None}
+        self.assertEqual(
+            g.canonical_repo("acme/widget", gh=gh),
+            "acme/widget",
+        )
+
+    def test_fork_missing_parent_falls_back_to_input(self):
+        # Defensive: isFork true but parent somehow absent -> keep input.
+        def gh(args):
+            return {"isFork": True, "parent": None}
+        self.assertEqual(
+            g.canonical_repo("x/y", gh=gh),
+            "x/y",
+        )
+
+
 if __name__ == "__main__":
     unittest.main()
