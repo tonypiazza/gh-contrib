@@ -46,9 +46,25 @@ opened there.
 
 ## Status
 
-Phase 1 (walking skeleton): current-repo listing (`--repo`) with a court-grouped
-digest. Court intelligence, current-PR mode, AI attribution, org/all breadth, and
-the setup/history commands arrive in later versions.
+Current-repo listing (`--repo`) with real **ball-in-court** classification, grouped
+by whose court the ball is in:
+
+- **Waiting on me** — a maintainer requested changes you haven't addressed yet, or the
+  base branch moved and your PR is now behind/conflicting.
+- **CI suspect** — checks are failing on your latest commit. Flagged as worth a look; the
+  plugin does not yet judge whether the failure is caused by your change (that comes with
+  AI attribution in a later version).
+- **Nudge candidates** — no activity for a while; a good candidate to ping.
+- **Waiting on them** — you've responded or pushed since the last review, the PR is
+  approved but unmerged, or an RFC is awaiting maintainer engagement.
+
+Classification uses event ordering, not GitHub's raw status: a PR still labeled
+"changes requested" is correctly shown as waiting on maintainers once you've pushed
+commits addressing the feedback.
+
+Arriving in later versions: current-PR mode (deep view of the PR on your branch),
+AI attribution (which failing files are AI-authored, and suggested fixes), org/all
+breadth across many repos, and the setup/history commands.
 
 ## License
 
