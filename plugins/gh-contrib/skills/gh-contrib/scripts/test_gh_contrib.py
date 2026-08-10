@@ -700,5 +700,27 @@ class TestRenderPrDetail(unittest.TestCase):
         self.assertIn("--repo", out)  # points to the wider view
 
 
+class TestLevel0Eligible(unittest.TestCase):
+    def test_bare_is_eligible(self):
+        ns = g.build_parser().parse_args([])
+        self.assertTrue(g.level0_eligible(ns))
+
+    def test_prs_only_is_eligible(self):
+        ns = g.build_parser().parse_args(["--prs"])
+        self.assertTrue(g.level0_eligible(ns))
+
+    def test_repo_flag_not_eligible(self):
+        ns = g.build_parser().parse_args(["--repo"])
+        self.assertFalse(g.level0_eligible(ns))
+
+    def test_issues_not_eligible(self):
+        ns = g.build_parser().parse_args(["--issues"])
+        self.assertFalse(g.level0_eligible(ns))
+
+    def test_all_not_eligible(self):
+        ns = g.build_parser().parse_args(["--all"])
+        self.assertFalse(g.level0_eligible(ns))
+
+
 if __name__ == "__main__":
     unittest.main()

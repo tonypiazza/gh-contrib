@@ -541,6 +541,14 @@ def resolve_types(ns):
     return (True, True)
 
 
+def level0_eligible(ns):
+    """True when the bare command should try current-PR mode (Level 0).
+
+    Any scope flag (--repo/--org/--all) or --issues forces a wider/other view.
+    """
+    return not (ns.repo or ns.org is not None or ns.all or ns.issues)
+
+
 def main(argv=None):
     ns = validate_flags(build_parser().parse_args(argv))
 
@@ -553,9 +561,32 @@ def main(argv=None):
 
     repo = canonical_repo(resolve_repo())
     me = resolve_login()
+    now = datetime.now(timezone.utc)
+
+    # Level 0: current-PR mode — a branch mapping to your open PR(s).
+    # Exactly one -> focused view; more than one -> ask; none -> fall through.
+    if level0_eligible(ns):
+        branch = current_branch()
+        prs = resolve_current_pr(repo, branch) if branch else []
+        if len(prs) == 1:
+            pr = prs[0]
+            enrich_item(pr, repo, me)
+            pr["court"] = classify_court(pr, now)
+            others = other_prs_needing_attention(repo, me, pr["number"], now)
+            if ns.json:
+                print(json.dumps({"repo": repo, "currentPr": pr,
+                                  "othersNeedingAttention": others}, indent=2))
+                return
+            print(render_pr_detail(repo, pr, others, glyphs=not ns.no_glyphs))
+            return
+        if len(prs) > 1:
+            refs = ", ".join(f"#{p['number']}" for p in prs)
+            sys.exit(f"Multiple open PRs on this branch ({refs}). "
+                     f"Run `/gh-contrib --repo` to see them all.")
+        # len 0 -> fall through to the repo-wide (Level 1) view.
+
     want_prs, want_issues = resolve_types(ns)
     items = fetch_items(repo, want_prs, want_issues)
-    now = datetime.now(timezone.utc)
     for it in items:
         enrich_item(it, repo, me)
         it["court"] = classify_court(it, now)
