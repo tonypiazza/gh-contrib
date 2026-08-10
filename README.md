@@ -68,8 +68,7 @@ commits addressing the feedback.
 
 **Current-PR mode** (the bare `/gh-contrib` on a PR branch) focuses on the PR you're
 working on and includes a one-line footer for any of your *other* open PRs that
-currently need attention. That footer reflects each PR's current state; a true
-"what changed since last run" view comes with the history/snapshot work later.
+currently need attention.
 
 **AI attribution.** In current-PR mode the plugin identifies which of the PR's changed
 files were AI-authored — and by which model — by reading this machine's local Claude Code
@@ -82,8 +81,16 @@ where to look and which model, not that a specific line is the bug, and it never
 maintainer's request as your fault. This relies on the single-machine-per-repo assumption
 above; code pasted manually from chat isn't captured.
 
-Arriving in later versions: org/all breadth across many repos, the "what changed since
-last run" delta, and the setup/history commands.
+**What changed since your last run.** Each run leads with a short delta: PRs **merged**
+(celebrated) or closed since you last looked, items whose court flipped, and newly-appeared
+items. This is backed by a single local snapshot per scope under `~/.gh-contrib/state/`. It
+compares against your *immediately previous* run only (not dated history); if you haven't
+run in over a month the baseline is treated as stale and the delta is suppressed in favor
+of the current state. A merge that both opened and completed between two runs won't appear,
+since it was never seen open — an accepted limit of the single-snapshot design.
+
+Arriving in later versions: org/all breadth across many repos, and the setup/history
+commands.
 
 ## License
 
