@@ -49,3 +49,7 @@ opened there.
 Phase 1 (walking skeleton): current-repo listing (`--repo`) with a court-grouped
 digest. Court intelligence, current-PR mode, AI attribution, org/all breadth, and
 the setup/history commands arrive in later versions.
+
+## License
+
+Apache-2.0
