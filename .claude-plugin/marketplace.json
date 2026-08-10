@@ -1,0 +1,13 @@
+{
+  "name": "gh-contrib-marketplace",
+  "owner": {
+    "name": "Tony Piazza"
+  },
+  "plugins": [
+    {
+      "name": "gh-contrib",
+      "source": "./plugins/gh-contrib",
+      "description": "Track the status of your own GitHub PRs and issues — whose court the ball is in, what to act on or nudge — via the gh CLI."
+    }
+  ]
+}

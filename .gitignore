@@ -1,0 +1,9 @@
+__pycache__/
+*.pyc
+.DS_Store
+
+# Working dev artifacts — never shipped with the plugin
+docs/superpowers/
+
+# Local Claude Code settings
+.claude/settings.local.json
