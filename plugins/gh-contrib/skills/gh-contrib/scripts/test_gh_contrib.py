@@ -699,6 +699,29 @@ class TestRenderPrDetail(unittest.TestCase):
         self.assertIn("#40", out)
         self.assertIn("--repo", out)  # points to the wider view
 
+    def test_shows_ai_authored_files_with_models(self):
+        pr = dict(self._pr())
+        pr["aiAuthoredFiles"] = [
+            {"path": "src/A.java", "models": ["claude-opus-4-8"]},
+            {"path": "src/B.java",
+             "models": ["claude-opus-4-8", "claude-sonnet-4-6"]},
+        ]
+        out = g.render_pr_detail("o/r", pr, [], glyphs=True)
+        self.assertIn("AI-authored", out)
+        self.assertIn("src/A.java", out)
+        self.assertIn("claude-opus-4-8", out)
+        self.assertIn("claude-sonnet-4-6", out)  # multi-model file lists both
+        # the anti-blame caveat is load-bearing for this learning feature — pin it
+        self.assertIn("not that a specific line is the bug", out)
+        # single-model file renders as "path (model)"
+        self.assertIn("src/A.java (claude-opus-4-8)", out)
+
+    def test_no_ai_line_when_none(self):
+        pr = dict(self._pr())
+        pr["aiAuthoredFiles"] = []
+        out = g.render_pr_detail("o/r", pr, [], glyphs=True)
+        self.assertNotIn("AI-authored", out)
+
 
 class TestLevel0Eligible(unittest.TestCase):
     def test_bare_is_eligible(self):

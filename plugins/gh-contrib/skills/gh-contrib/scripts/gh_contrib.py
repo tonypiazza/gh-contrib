@@ -572,6 +572,17 @@ def render_pr_detail(repo, pr, others, glyphs=True):
     for phrase in describe_pr_state(pr):
         lines.append(f"- {phrase}")
 
+    ai_files = pr.get("aiAuthoredFiles") or []
+    if ai_files:
+        lines.append("")
+        lines.append(f"**AI-authored files in this PR ({len(ai_files)}):**")
+        for entry in ai_files:
+            models = ", ".join(entry.get("models") or ["unknown"])
+            lines.append(f"- {entry['path']} ({models})")
+        lines.append("_Attribution is file-level (from local session history) — it "
+                     "shows where to focus your review and which model wrote the code, "
+                     "not that a specific line is the bug._")
+
     if others:
         refs = ", ".join(f"#{p['number']}" for p in others)
         lines.append("")
@@ -658,6 +669,9 @@ def main(argv=None):
             pr = prs[0]
             enrich_item(pr, repo, me)
             pr["court"] = classify_court(pr, now)
+            touched = claude_touched_files(os.getcwd())
+            pr["aiAuthoredFiles"] = attributed_files(
+                touched, pr_changed_files(repo, pr["number"]))
             others = other_prs_needing_attention(repo, me, pr["number"], now)
             if ns.json:
                 print(json.dumps({"repo": repo, "currentPr": pr,
