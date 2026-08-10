@@ -473,6 +473,29 @@ def render_dense(repo, items, glyphs=True):
     return "\n".join(lines)
 
 
+def render_pr_detail(repo, pr, others, glyphs=True):
+    """Render the Level-0 focused view: one PR in depth + an exception-only footer."""
+    marker = _marker(pr["court"], glyphs)
+    lines = [
+        f"**{repo}** — current PR",
+        "",
+        f"{marker} **#{pr['number']} {pr['title']}**",
+        pr["url"],
+        "",
+    ]
+    for phrase in describe_pr_state(pr):
+        lines.append(f"- {phrase}")
+
+    if others:
+        refs = ", ".join(f"#{p['number']}" for p in others)
+        lines.append("")
+        lines.append(
+            f"⚠ {len(others)} other open PR(s) need attention: {refs} "
+            f"— run `/gh-contrib --repo` for the full list."
+        )
+    return "\n".join(lines) + "\n"
+
+
 def build_parser():
     p = argparse.ArgumentParser(
         prog="gh_contrib.py",

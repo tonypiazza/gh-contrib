@@ -668,5 +668,37 @@ class TestOtherPrsNeedingAttention(unittest.TestCase):
         self.assertEqual(out, [])
 
 
+class TestRenderPrDetail(unittest.TestCase):
+    def _pr(self):
+        return {"kind": "pr", "number": 7036, "title": "rss rewrite",
+                "url": "https://github.com/o/r/pull/7036",
+                "court": g.COURT_CI_SUSPECT, "reviewDecision": "CHANGES_REQUESTED",
+                "addressed": True, "mergeStateStatus": "BLOCKED",
+                "mergeable": "MERGEABLE", "ciFailing": True}
+
+    def test_shows_pr_header_and_marker(self):
+        out = g.render_pr_detail("o/r", self._pr(), [], glyphs=True)
+        self.assertIn("#7036", out)
+        self.assertIn("rss rewrite", out)
+        self.assertIn("🟠", out)  # CI_SUSPECT marker
+
+    def test_shows_status_lines(self):
+        out = g.render_pr_detail("o/r", self._pr(), [], glyphs=True)
+        self.assertIn("re-review", out.lower())
+        self.assertIn("ci failing", out.lower())
+
+    def test_footer_silent_when_no_others(self):
+        out = g.render_pr_detail("o/r", self._pr(), [], glyphs=True)
+        self.assertNotIn("other open PR", out)
+
+    def test_footer_lists_others(self):
+        others = [{"kind": "pr", "number": 40, "title": "behind",
+                   "url": "u40", "court": g.COURT_WAITING_ON_ME}]
+        out = g.render_pr_detail("o/r", self._pr(), others, glyphs=True)
+        self.assertIn("other open pr", out.lower())
+        self.assertIn("#40", out)
+        self.assertIn("--repo", out)  # points to the wider view
+
+
 if __name__ == "__main__":
     unittest.main()
