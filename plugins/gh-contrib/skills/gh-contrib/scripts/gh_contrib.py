@@ -215,6 +215,7 @@ COURT_WAITING_ON_ME = "WAITING_ON_ME"
 COURT_WAITING_ON_THEM = "WAITING_ON_THEM"
 COURT_STALE_NUDGE = "STALE_NUDGE"
 COURT_QUIET = "QUIET"
+COURT_CI_SUSPECT = "CI_SUSPECT"
 
 
 def normalize_item(raw, kind):
@@ -229,13 +230,44 @@ def normalize_item(raw, kind):
     }
 
 
-def classify_court(item):
-    """Phase-1 placeholder: an item you authored is, by default, awaiting others.
+def _is_stale(item, now, stale_days):
+    updated = _parse_iso(item.get("updatedAt"))
+    if not updated:
+        return False
+    return (now - updated).days >= stale_days
 
-    Phase 2 replaces this with event-ordering logic (review state, CI, base
-    movement). Kept intentionally trivial so Phase 1 ships without prematurely
-    implementing correctness-critical logic.
+
+def classify_court(item, now, stale_days=STALE_DAYS):
+    """Decide whose court an item is in (pure; event-ordering, not raw status).
+
+    PRs read signals merged by `extract_pr_signals`. Precedence (first match):
+      1. unaddressed changes requested          -> WAITING_ON_ME
+      2. base moved / conflicts (behind/dirty)  -> WAITING_ON_ME
+      3. CI failing on head                     -> CI_SUSPECT (not pinned; Phase 3 attributes)
+      4. approved, not merged (unless stale)      -> WAITING_ON_THEM
+      5. addressed changes requested (unless stale) -> WAITING_ON_THEM
+      6. no activity in stale_days              -> STALE_NUDGE
+      7. otherwise                              -> WAITING_ON_THEM
+    Issues skip PR-only rules and classify on staleness alone.
+
+    now must be a timezone-aware (UTC) datetime.
     """
+    if item.get("kind") == "pr":
+        decision = item.get("reviewDecision")
+        if decision == "CHANGES_REQUESTED" and not item.get("addressed"):
+            return COURT_WAITING_ON_ME
+        if (item.get("mergeStateStatus") in ("BEHIND", "DIRTY")
+                or item.get("mergeable") == "CONFLICTING"):
+            return COURT_WAITING_ON_ME
+        if item.get("ciFailing"):
+            return COURT_CI_SUSPECT
+        if decision == "APPROVED" and not _is_stale(item, now, stale_days):
+            return COURT_WAITING_ON_THEM
+        if decision == "CHANGES_REQUESTED" and item.get("addressed") \
+                and not _is_stale(item, now, stale_days):
+            return COURT_WAITING_ON_THEM
+    if _is_stale(item, now, stale_days):
+        return COURT_STALE_NUDGE
     return COURT_WAITING_ON_THEM
 
 
@@ -278,12 +310,14 @@ def fetch_items(repo, want_prs, want_issues, gh=run_gh):
 # court -> (glyph, text marker, section heading, rollup phrase)
 COURT_DISPLAY = {
     COURT_WAITING_ON_ME:   ("🔴", "[ME]",    "Waiting on me",     "waiting on you"),
+    COURT_CI_SUSPECT:      ("🟠", "[CI?]",   "CI suspect (check it)", "CI suspect"),
     COURT_STALE_NUDGE:     ("🟡", "[NUDGE]", "Nudge candidates",  "to nudge"),
     COURT_WAITING_ON_THEM: ("🟢", "[THEM]",  "Waiting on them",   "waiting on them"),
     COURT_QUIET:           ("⚪", "[quiet]", "Quiet",             "quiet"),
 }
 COURT_ORDER = [
-    COURT_WAITING_ON_ME, COURT_STALE_NUDGE, COURT_WAITING_ON_THEM, COURT_QUIET,
+    COURT_WAITING_ON_ME, COURT_CI_SUSPECT, COURT_STALE_NUDGE,
+    COURT_WAITING_ON_THEM, COURT_QUIET,
 ]
 
 

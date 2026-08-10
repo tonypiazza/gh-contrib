@@ -124,15 +124,6 @@ class TestNormalizeAndClassify(unittest.TestCase):
         item = g.normalize_item(raw, kind="issue")
         self.assertEqual(item["kind"], "issue")
 
-    def test_classify_court_placeholder_is_waiting_on_them(self):
-        item = g.normalize_item(
-            {"number": 1, "title": "t", "url": "u",
-             "createdAt": "2026-07-01T00:00:00Z",
-             "updatedAt": "2026-07-02T00:00:00Z"},
-            kind="pr",
-        )
-        self.assertEqual(g.classify_court(item), "WAITING_ON_THEM")
-
     def test_dedupe_by_url(self):
         a = g.normalize_item({"number": 1, "title": "t", "url": "same",
                               "createdAt": "x", "updatedAt": "y"}, kind="pr")
@@ -223,6 +214,13 @@ class TestRenderDense(unittest.TestCase):
         ]
         out = g.render_dense("o/r", items, glyphs=True)
         self.assertLess(out.index("Waiting on me"), out.index("Waiting on them"))
+
+    def test_ci_suspect_renders_with_marker(self):
+        items = [{"kind": "pr", "number": 5, "title": "flaky",
+                  "url": "u", "court": g.COURT_CI_SUSPECT}]
+        out = g.render_dense("o/r", items, glyphs=True)
+        self.assertIn("🟠", out)
+        self.assertIn("CI suspect", out)
 
 
 class TestArgParsing(unittest.TestCase):
@@ -391,6 +389,85 @@ class TestExtractPrSignals(unittest.TestCase):
     def test_merge_state_surfaced(self):
         s = g.extract_pr_signals(self._detail(mergeStateStatus="DIRTY"), "me")
         self.assertEqual(s["mergeStateStatus"], "DIRTY")
+
+
+import datetime as _dt
+
+NOW = _dt.datetime(2026, 8, 10, tzinfo=_dt.timezone.utc)
+
+
+def _pr(**signals):
+    item = {"kind": "pr", "number": 1, "title": "t", "url": "u",
+            "updatedAt": "2026-08-09T00:00:00Z"}
+    item.update(signals)
+    return item
+
+
+class TestClassifyCourt(unittest.TestCase):
+    def test_unaddressed_changes_requested_is_me(self):
+        it = _pr(reviewDecision="CHANGES_REQUESTED", addressed=False,
+                 mergeStateStatus="BLOCKED", ciFailing=False)
+        self.assertEqual(g.classify_court(it, NOW), g.COURT_WAITING_ON_ME)
+
+    def test_unaddressed_cr_outranks_ci(self):
+        it = _pr(reviewDecision="CHANGES_REQUESTED", addressed=False,
+                 mergeStateStatus="BLOCKED", ciFailing=True)
+        self.assertEqual(g.classify_court(it, NOW), g.COURT_WAITING_ON_ME)
+
+    def test_base_behind_is_me(self):
+        it = _pr(reviewDecision="APPROVED", addressed=False,
+                 mergeStateStatus="BEHIND", ciFailing=False)
+        self.assertEqual(g.classify_court(it, NOW), g.COURT_WAITING_ON_ME)
+
+    def test_dirty_is_me(self):
+        it = _pr(reviewDecision=None, mergeStateStatus="DIRTY", ciFailing=False)
+        self.assertEqual(g.classify_court(it, NOW), g.COURT_WAITING_ON_ME)
+
+    def test_ci_failing_is_suspect_when_addressed(self):
+        it = _pr(reviewDecision="CHANGES_REQUESTED", addressed=True,
+                 mergeStateStatus="BLOCKED", ciFailing=True)
+        self.assertEqual(g.classify_court(it, NOW), g.COURT_CI_SUSPECT)
+
+    def test_approved_not_merged_is_them(self):
+        it = _pr(reviewDecision="APPROVED", mergeStateStatus="BLOCKED",
+                 ciFailing=False)
+        self.assertEqual(g.classify_court(it, NOW), g.COURT_WAITING_ON_THEM)
+
+    def test_addressed_cr_is_them(self):
+        it = _pr(reviewDecision="CHANGES_REQUESTED", addressed=True,
+                 mergeStateStatus="BLOCKED", ciFailing=False)
+        self.assertEqual(g.classify_court(it, NOW), g.COURT_WAITING_ON_THEM)
+
+    def test_stale_pr_is_nudge(self):
+        it = _pr(reviewDecision="APPROVED", mergeStateStatus="BLOCKED",
+                 ciFailing=False, updatedAt="2026-07-01T00:00:00Z")
+        self.assertEqual(g.classify_court(it, NOW, stale_days=14),
+                         g.COURT_STALE_NUDGE)
+
+    def test_issue_recent_is_them(self):
+        it = {"kind": "issue", "number": 2, "title": "RFC", "url": "u",
+              "updatedAt": "2026-08-09T00:00:00Z"}
+        self.assertEqual(g.classify_court(it, NOW), g.COURT_WAITING_ON_THEM)
+
+    def test_issue_stale_is_nudge(self):
+        it = {"kind": "issue", "number": 2, "title": "RFC", "url": "u",
+              "updatedAt": "2026-07-01T00:00:00Z"}
+        self.assertEqual(g.classify_court(it, NOW, stale_days=14),
+                         g.COURT_STALE_NUDGE)
+
+    def test_stale_pr_with_failing_ci_is_suspect(self):
+        # CI failing outranks staleness: more actionable than a generic nudge.
+        it = _pr(reviewDecision="APPROVED", addressed=True,
+                 mergeStateStatus="BLOCKED", ciFailing=True,
+                 updatedAt="2026-07-01T00:00:00Z")
+        self.assertEqual(g.classify_court(it, NOW, stale_days=14),
+                         g.COURT_CI_SUSPECT)
+
+    def test_never_reviewed_recent_pr_is_them(self):
+        # Open PR awaiting first review (no signals set) -> waiting on them.
+        it = _pr(reviewDecision=None, mergeStateStatus="BLOCKED",
+                 ciFailing=False)
+        self.assertEqual(g.classify_court(it, NOW), g.COURT_WAITING_ON_THEM)
 
 
 if __name__ == "__main__":
