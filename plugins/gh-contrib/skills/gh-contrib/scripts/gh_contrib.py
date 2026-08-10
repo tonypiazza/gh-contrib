@@ -56,6 +56,28 @@ def ci_failing_on_head(rollup):
     return False
 
 
+def last_changes_requested_at(reviews, me):
+    """Latest submittedAt among CHANGES_REQUESTED reviews NOT authored by `me`.
+
+    Your own reviews never put the ball in your court, so they are excluded.
+    Returns an ISO string or None.
+    """
+    stamps = [
+        r.get("submittedAt")
+        for r in (reviews or [])
+        if r.get("state") == "CHANGES_REQUESTED"
+        and (r.get("author") or {}).get("login") != me
+        and r.get("submittedAt")
+    ]
+    return max(stamps) if stamps else None
+
+
+def last_author_commit_at(commits):
+    """Latest committedDate among the PR's commits. Returns an ISO string or None."""
+    stamps = [c.get("committedDate") for c in (commits or []) if c.get("committedDate")]
+    return max(stamps) if stamps else None
+
+
 def _default_runner(args):
     """Run `gh <args>` and return the CompletedProcess (check=True)."""
     return subprocess.run(["gh", *args], capture_output=True, text=True, check=True)

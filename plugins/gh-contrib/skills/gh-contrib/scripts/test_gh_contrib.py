@@ -308,5 +308,51 @@ class TestCiAndTime(unittest.TestCase):
         self.assertFalse(g.ci_failing_on_head(None))
 
 
+class TestEventOrderingSignals(unittest.TestCase):
+    def _reviews(self):
+        return [
+            {"author": {"login": "maint"}, "state": "CHANGES_REQUESTED",
+             "submittedAt": "2026-08-01T10:00:00Z"},
+            {"author": {"login": "maint"}, "state": "CHANGES_REQUESTED",
+             "submittedAt": "2026-08-06T15:10:54Z"},
+            {"author": {"login": "me"}, "state": "COMMENTED",
+             "submittedAt": "2026-08-06T15:32:44Z"},
+        ]
+
+    def test_last_changes_requested_ignores_me(self):
+        reviews = self._reviews() + [
+            {"author": {"login": "me"}, "state": "CHANGES_REQUESTED",
+             "submittedAt": "2026-08-09T00:00:00Z"}]
+        self.assertEqual(
+            g.last_changes_requested_at(reviews, "me"),
+            "2026-08-06T15:10:54Z",
+        )
+
+    def test_last_changes_requested_latest_wins(self):
+        self.assertEqual(
+            g.last_changes_requested_at(self._reviews(), "me"),
+            "2026-08-06T15:10:54Z",
+        )
+
+    def test_last_changes_requested_none(self):
+        reviews = [{"author": {"login": "maint"}, "state": "APPROVED",
+                    "submittedAt": "2026-08-01T10:00:00Z"}]
+        self.assertIsNone(g.last_changes_requested_at(reviews, "me"))
+        self.assertIsNone(g.last_changes_requested_at([], "me"))
+
+    def test_last_author_commit_latest(self):
+        commits = [
+            {"committedDate": "2026-08-01T02:55:13Z"},
+            {"committedDate": "2026-08-06T15:32:11Z"},
+            {"committedDate": "2026-08-04T23:40:01Z"},
+        ]
+        self.assertEqual(
+            g.last_author_commit_at(commits), "2026-08-06T15:32:11Z")
+
+    def test_last_author_commit_none(self):
+        self.assertIsNone(g.last_author_commit_at([]))
+        self.assertIsNone(g.last_author_commit_at(None))
+
+
 if __name__ == "__main__":
     unittest.main()
