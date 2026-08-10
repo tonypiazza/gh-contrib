@@ -742,5 +742,96 @@ class TestTranscriptDir(unittest.TestCase):
         self.assertEqual(d, "/cfg/projects/-Users-x-repos-foo")
 
 
+class TestClaudeTouchedFiles(unittest.TestCase):
+    def _transcript_lines(self):
+        # opus edits A and B; a later sonnet session also edits B; scratch filtered.
+        rec1 = {"type": "assistant", "message": {"model": "claude-opus-4-8",
+            "content": [
+                {"type": "tool_use", "name": "Write",
+                 "input": {"file_path": "/repo/src/A.java"}},
+                {"type": "tool_use", "name": "Edit",
+                 "input": {"file_path": "/repo/src/B.java"}},
+                {"type": "text", "text": "ignore me"},
+            ]}}
+        rec2 = {"type": "assistant", "message": {"model": "claude-sonnet-4-6",
+            "content": [
+                {"type": "tool_use", "name": "Edit",
+                 "input": {"file_path": "/repo/src/B.java"}},
+                {"type": "tool_use", "name": "Edit",
+                 "input": {"file_path": "/home/u/.claude/scratch/notes.md"}},
+            ]}}
+        user_rec = {"type": "user", "message": {"content": "hi"}}
+        return [json.dumps(rec1), json.dumps(user_rec), json.dumps(rec2)]
+
+    def test_maps_files_to_models(self):
+        lister = lambda d: ["t1.jsonl"]
+        opener = lambda p: self._transcript_lines()
+        out = g.claude_touched_files("/repo", opener=opener, lister=lister)
+        self.assertEqual(out, {
+            "src/A.java": ["claude-opus-4-8"],
+            "src/B.java": ["claude-opus-4-8", "claude-sonnet-4-6"],
+        })
+
+    def test_missing_dir_returns_empty(self):
+        lister = lambda d: []
+        out = g.claude_touched_files("/repo", opener=lambda p: [], lister=lister)
+        self.assertEqual(out, {})
+
+    def test_malformed_line_skipped(self):
+        lister = lambda d: ["t.jsonl"]
+        opener = lambda p: ["not json", json.dumps({"type": "assistant",
+            "message": {"model": "claude-opus-4-8", "content": [
+                {"type": "tool_use", "name": "Write",
+                 "input": {"file_path": "/repo/x.py"}}]}})]
+        out = g.claude_touched_files("/repo", opener=opener, lister=lister)
+        self.assertEqual(out, {"x.py": ["claude-opus-4-8"]})
+
+    def test_missing_model_is_unknown(self):
+        lister = lambda d: ["t.jsonl"]
+        opener = lambda p: [json.dumps({"type": "assistant", "message": {
+            "content": [{"type": "tool_use", "name": "Write",
+                         "input": {"file_path": "/repo/y.py"}}]}})]
+        out = g.claude_touched_files("/repo", opener=opener, lister=lister)
+        self.assertEqual(out, {"y.py": ["unknown"]})
+
+    def test_merges_across_multiple_files(self):
+        def opener(p):
+            if p == "a.jsonl":
+                return [json.dumps({"type": "assistant", "message": {
+                    "model": "claude-opus-4-8", "content": [
+                        {"type": "tool_use", "name": "Write",
+                         "input": {"file_path": "/repo/a.py"}}]}})]
+            return [json.dumps({"type": "assistant", "message": {
+                "model": "claude-opus-4-8", "content": [
+                    {"type": "tool_use", "name": "Edit",
+                     "input": {"file_path": "/repo/b.py"}}]}})]
+        out = g.claude_touched_files("/repo", opener=opener,
+                                     lister=lambda d: ["a.jsonl", "b.jsonl"])
+        self.assertEqual(out, {"a.py": ["claude-opus-4-8"],
+                               "b.py": ["claude-opus-4-8"]})
+
+    def test_tolerates_malformed_records(self):
+        lines = [
+            "42",                                   # valid JSON, not an object
+            json.dumps({"type": "assistant", "message": "a string"}),  # message not dict
+            json.dumps({"type": "assistant", "message": {"model": "m",
+                "content": [{"type": "tool_use", "name": "Write",
+                             "input": {"file_path": 123}}]}}),  # non-string path
+            json.dumps({"type": "assistant", "message": {"model": "claude-opus-4-8",
+                "content": [{"type": "tool_use", "name": "Write",
+                             "input": {"file_path": "/repo/ok.py"}}]}}),  # good
+        ]
+        out = g.claude_touched_files("/repo", opener=lambda p: lines,
+                                     lister=lambda d: ["t.jsonl"])
+        self.assertEqual(out, {"ok.py": ["claude-opus-4-8"]})  # bad lines skipped, good kept
+
+    def test_tool_use_without_file_path_skipped(self):
+        lines = [json.dumps({"type": "assistant", "message": {"model": "m",
+            "content": [{"type": "tool_use", "name": "Bash", "input": {"command": "ls"}}]}})]
+        out = g.claude_touched_files("/repo", opener=lambda p: lines,
+                                     lister=lambda d: ["t.jsonl"])
+        self.assertEqual(out, {})
+
+
 if __name__ == "__main__":
     unittest.main()

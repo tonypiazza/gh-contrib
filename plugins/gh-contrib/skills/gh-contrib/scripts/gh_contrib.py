@@ -246,6 +246,58 @@ def transcript_dir(cwd, env=None):
     return f"{base}/{slug}"
 
 
+_EDIT_TOOLS = ("Edit", "Write", "MultiEdit", "NotebookEdit")
+
+
+def _default_lister(directory):
+    import glob
+    return glob.glob(f"{directory}/*.jsonl")
+
+
+def _default_opener(path):
+    with open(path) as fh:
+        yield from fh
+
+
+def claude_touched_files(cwd, opener=None, lister=None, env=None):
+    """Map of files Claude edited in `cwd` to the model(s) that edited them.
+
+    Returns {repo-relative path: sorted list of model ids}. Mines assistant
+    tool_use records (Edit/Write/MultiEdit/NotebookEdit) for file_path, keeps
+    only paths under cwd, and records `message.model` (or "unknown"). A file
+    edited by multiple models across sessions lists all of them. Tolerates a
+    missing dir and malformed lines. lister/opener are injectable for testing.
+    """
+    lister = lister or _default_lister
+    opener = opener or _default_opener
+    prefix = cwd.rstrip("/") + "/"
+    touched = {}  # path -> set of models
+    for path in lister(transcript_dir(cwd, env=env)):
+        try:
+            lines = opener(path)
+        except OSError:
+            continue
+        for line in lines:
+            try:
+                rec = json.loads(line)
+            except (ValueError, TypeError):
+                continue
+            if not isinstance(rec, dict) or rec.get("type") != "assistant":
+                continue
+            msg = rec.get("message")
+            if not isinstance(msg, dict):
+                continue
+            model = msg.get("model") or "unknown"
+            for block in (msg.get("content") or []):
+                if not isinstance(block, dict):
+                    continue
+                if block.get("type") == "tool_use" and block.get("name") in _EDIT_TOOLS:
+                    fp = (block.get("input") or {}).get("file_path")
+                    if isinstance(fp, str) and fp.startswith(prefix):
+                        touched.setdefault(fp[len(prefix):], set()).add(model)
+    return {path: sorted(models) for path, models in touched.items()}
+
+
 def resolve_login(runner=None):
     """Return the authenticated user's login (for excluding their own reviews).
 
