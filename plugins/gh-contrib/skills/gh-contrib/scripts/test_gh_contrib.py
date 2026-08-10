@@ -504,5 +504,20 @@ class TestResolveLogin(unittest.TestCase):
         self.assertEqual(g.resolve_login(runner=runner), "tonypiazza")
 
 
+class TestCurrentBranch(unittest.TestCase):
+    def test_returns_branch(self):
+        runner = make_runner([FakeCompleted(stdout="rss-source-rewrite\n",
+                                            returncode=0)])
+        self.assertEqual(g.current_branch(runner=runner), "rss-source-rewrite")
+
+    def test_detached_head_returns_none(self):
+        runner = make_runner([FakeCompleted(stdout="HEAD\n", returncode=0)])
+        self.assertIsNone(g.current_branch(runner=runner))
+
+    def test_not_a_repo_returns_none(self):
+        runner = make_runner([FakeCompleted(returncode=128)])
+        self.assertIsNone(g.current_branch(runner=runner))
+
+
 if __name__ == "__main__":
     unittest.main()

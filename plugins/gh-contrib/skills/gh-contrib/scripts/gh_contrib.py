@@ -182,6 +182,26 @@ def _git_origin(runner=None):
     return (proc.stdout or "").strip()
 
 
+def _default_branch_runner(args):
+    return subprocess.run(args, capture_output=True, text=True)
+
+
+def current_branch(runner=None):
+    """Return the working directory's git branch, or None.
+
+    None when detached (branch reads as 'HEAD') or not in a git repo.
+    Injectable runner for testing; called positionally with the args list.
+    """
+    proc = (runner or _default_branch_runner)(
+        ["git", "rev-parse", "--abbrev-ref", "HEAD"])
+    if proc.returncode != 0:
+        return None
+    branch = (proc.stdout or "").strip()
+    if not branch or branch == "HEAD":
+        return None
+    return branch
+
+
 def resolve_repo(runner=None):
     """Resolve the current repo as 'owner/name' from git origin, or exit clearly."""
     origin = _git_origin(runner=runner)
