@@ -941,5 +941,72 @@ class TestSnapshotIO(unittest.TestCase):
         self.assertIsNone(saved_at)
 
 
+class TestComputeDelta(unittest.TestCase):
+    NOW = _dt.datetime(2026, 8, 10, tzinfo=_dt.timezone.utc)
+
+    def test_first_run(self):
+        d = g.compute_delta(None, {"u1": {"court": "X"}}, self.NOW, None)
+        self.assertEqual(d["baseline"], "first")
+        self.assertEqual(d["new"], [])
+        self.assertEqual(d["gone"], [])
+
+    def test_stale_baseline_suppresses(self):
+        prev = {"u1": {"court": "X"}}
+        d = g.compute_delta(prev, {"u2": {"court": "Y"}}, self.NOW,
+                            "2026-06-01T00:00:00Z")  # ~70 days old
+        self.assertEqual(d["baseline"], "stale")
+        self.assertEqual(d["new"], [])
+        self.assertEqual(d["gone"], [])
+
+    def test_new_gone_and_court_change(self):
+        prev = {"u1": {"court": "WAITING_ON_THEM"},
+                "u2": {"court": "WAITING_ON_THEM"}}
+        cur = {"u1": {"court": "WAITING_ON_ME"},   # court flipped
+               "u3": {"court": "WAITING_ON_THEM"}}  # new
+        d = g.compute_delta(prev, cur, self.NOW, "2026-08-09T00:00:00Z")
+        self.assertEqual(d["baseline"], "ok")
+        self.assertEqual(d["new"], ["u3"])
+        self.assertEqual(d["gone"], ["u2"])
+        self.assertEqual(d["court_changed"],
+                         [{"url": "u1", "from": "WAITING_ON_THEM",
+                           "to": "WAITING_ON_ME"}])
+
+    def test_no_changes(self):
+        prev = {"u1": {"court": "X"}}
+        d = g.compute_delta(prev, {"u1": {"court": "X"}}, self.NOW,
+                            "2026-08-09T00:00:00Z")
+        self.assertEqual(d["baseline"], "ok")
+        self.assertEqual((d["new"], d["gone"], d["court_changed"]), ([], [], []))
+
+    def test_everything_gone(self):
+        prev = {"u1": {"court": "X"}, "u2": {"court": "Y"}}
+        d = g.compute_delta(prev, {}, self.NOW, "2026-08-09T00:00:00Z")
+        self.assertEqual(d["baseline"], "ok")
+        self.assertEqual(d["gone"], ["u1", "u2"])
+        self.assertEqual(d["new"], [])
+
+    def test_everything_new_from_empty_previous(self):
+        # previous is an empty dict (a real prior run with no open items), NOT None
+        d = g.compute_delta({}, {"u1": {"court": "X"}}, self.NOW,
+                            "2026-08-09T00:00:00Z")
+        self.assertEqual(d["baseline"], "ok")
+        self.assertEqual(d["new"], ["u1"])
+        self.assertEqual(d["gone"], [])
+
+    def test_court_value_to_missing_counts_as_change(self):
+        prev = {"u1": {"court": "WAITING_ON_ME"}}
+        cur = {"u1": {}}  # court key gone
+        d = g.compute_delta(prev, cur, self.NOW, "2026-08-09T00:00:00Z")
+        self.assertEqual(d["court_changed"],
+                         [{"url": "u1", "from": "WAITING_ON_ME", "to": None}])
+
+    def test_falsy_prev_time_is_stale(self):
+        # a non-None previous but missing/empty timestamp -> can't trust the baseline
+        d = g.compute_delta({"u1": {"court": "X"}}, {"u2": {"court": "Y"}},
+                            self.NOW, "")
+        self.assertEqual(d["baseline"], "stale")
+        self.assertEqual((d["new"], d["gone"]), ([], []))
+
+
 if __name__ == "__main__":
     unittest.main()

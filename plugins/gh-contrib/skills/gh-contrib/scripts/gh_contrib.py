@@ -309,6 +309,33 @@ def load_snapshot(scope_id, reader=None, env=None):
     return data.get("items"), data.get("savedAt")
 
 
+def compute_delta(previous, current, now, prev_time,
+                  max_age_days=SNAPSHOT_MAX_AGE_DAYS):
+    """Diff previous vs current fingerprints (pure).
+
+    Returns {"baseline": "first"|"stale"|"ok", "new": [urls],
+             "court_changed": [{url, from, to}], "gone": [urls]}.
+    - previous is None -> first run (nothing flagged).
+    - prev_time missing or older than max_age_days -> stale (delta suppressed).
+    - else ok: new/gone by url set difference, court_changed for urls in both.
+    """
+    empty = {"new": [], "court_changed": [], "gone": []}
+    if previous is None:
+        return {"baseline": "first", **empty}
+    prev_dt = _parse_iso(prev_time) if prev_time else None
+    if prev_dt is None or (now - prev_dt).days > max_age_days:
+        return {"baseline": "stale", **empty}
+    new = [u for u in current if u not in previous]
+    gone = [u for u in previous if u not in current]
+    court_changed = [
+        {"url": u, "from": previous[u].get("court"), "to": current[u].get("court")}
+        for u in current
+        if u in previous and previous[u].get("court") != current[u].get("court")
+    ]
+    return {"baseline": "ok", "new": sorted(new),
+            "court_changed": court_changed, "gone": sorted(gone)}
+
+
 _EDIT_TOOLS = ("Edit", "Write", "MultiEdit", "NotebookEdit")
 
 
