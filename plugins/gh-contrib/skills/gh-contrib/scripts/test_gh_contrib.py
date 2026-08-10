@@ -722,5 +722,25 @@ class TestLevel0Eligible(unittest.TestCase):
         self.assertFalse(g.level0_eligible(ns))
 
 
+class TestTranscriptDir(unittest.TestCase):
+    def test_default_base_and_slug(self):
+        d = g.transcript_dir("/Users/x/repos/data-prepper",
+                             env={"HOME": "/Users/x"})
+        self.assertEqual(
+            d, "/Users/x/.claude/projects/-Users-x-repos-data-prepper")
+
+    def test_dot_in_path_becomes_dash(self):
+        d = g.transcript_dir("/Users/x/.supacode/repos/foo",
+                             env={"HOME": "/Users/x"})
+        self.assertEqual(
+            d, "/Users/x/.claude/projects/-Users-x--supacode-repos-foo")
+
+    def test_config_dir_override(self):
+        d = g.transcript_dir("/Users/x/repos/foo",
+                             env={"HOME": "/Users/x",
+                                  "CLAUDE_CONFIG_DIR": "/cfg"})
+        self.assertEqual(d, "/cfg/projects/-Users-x-repos-foo")
+
+
 if __name__ == "__main__":
     unittest.main()

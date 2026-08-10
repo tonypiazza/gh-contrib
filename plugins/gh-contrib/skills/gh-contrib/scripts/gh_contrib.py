@@ -13,6 +13,7 @@ pointed at another account.
 
 import argparse
 import json
+import os
 import re
 import subprocess
 import sys
@@ -229,6 +230,20 @@ def canonical_repo(repo, gh=run_gh):
         if owner and name:
             return f"{owner}/{name}"
     return repo
+
+
+def transcript_dir(cwd, env=None):
+    """Path to this repo's Claude Code transcript directory (pure).
+
+    Base is $CLAUDE_CONFIG_DIR/projects if set, else $HOME/.claude/projects.
+    The per-project slug is the absolute cwd with '/' and '.' both -> '-'.
+    """
+    env = env if env is not None else os.environ
+    config_dir = env.get("CLAUDE_CONFIG_DIR")
+    base = (config_dir + "/projects") if config_dir \
+        else env.get("HOME", "") + "/.claude/projects"
+    slug = cwd.replace("/", "-").replace(".", "-")
+    return f"{base}/{slug}"
 
 
 def resolve_login(runner=None):
