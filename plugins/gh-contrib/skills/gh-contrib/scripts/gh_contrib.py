@@ -402,6 +402,32 @@ def resolve_current_pr(repo, branch, gh=run_gh):
     return [normalize_item(p, kind="pr") for p in raw]
 
 
+_FOOTER_COURTS = (COURT_WAITING_ON_ME, COURT_CI_SUSPECT)
+
+
+def other_prs_needing_attention(repo, me, exclude_number, now, gh=run_gh):
+    """The user's other open PRs in `repo` currently needing attention.
+
+    Excludes `exclude_number` (the PR shown in full). Enriches + classifies each
+    and keeps only WAITING_ON_ME / CI_SUSPECT. This is a current-state check, not
+    a since-last-run delta (the delta arrives with the Phase-4 snapshot).
+    """
+    raw = gh([
+        "pr", "list", f"--repo={repo}", "--author=@me", "--state=open",
+        "--json", "number,title,url,createdAt,updatedAt",
+    ])
+    out = []
+    for p in raw:
+        if p.get("number") == exclude_number:
+            continue
+        item = normalize_item(p, kind="pr")
+        enrich_item(item, repo, me, gh=gh)
+        item["court"] = classify_court(item, now)
+        if item["court"] in _FOOTER_COURTS:
+            out.append(item)
+    return out
+
+
 # court -> (glyph, text marker, section heading, rollup phrase)
 COURT_DISPLAY = {
     COURT_WAITING_ON_ME:   ("🔴", "[ME]",    "Waiting on me",     "waiting on you"),

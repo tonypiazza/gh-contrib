@@ -624,5 +624,49 @@ class TestDescribePrState(unittest.TestCase):
         self.assertIn("ci failing", lines[2].lower())
 
 
+class TestOtherPrsNeedingAttention(unittest.TestCase):
+    def _gh_factory(self, listing, details):
+        # listing: returned for `pr list`; details: {number: detail dict} for `pr view`.
+        def gh(args):
+            if "list" in args:
+                return listing
+            num = int([a for a in args if a.isdigit()][0])
+            return details[num]
+        return gh
+
+    def test_keeps_only_needs_attention_and_excludes_current(self):
+        listing = [
+            {"number": 7036, "title": "current", "url": "u36",
+             "createdAt": "x", "updatedAt": "2026-08-09T00:00:00Z"},
+            {"number": 40, "title": "behind one", "url": "u40",
+             "createdAt": "x", "updatedAt": "2026-08-09T00:00:00Z"},
+            {"number": 50, "title": "healthy one", "url": "u50",
+             "createdAt": "x", "updatedAt": "2026-08-09T00:00:00Z"},
+        ]
+        details = {
+            40: {"reviewDecision": "APPROVED", "mergeStateStatus": "BEHIND",
+                 "mergeable": "MERGEABLE", "reviews": [], "commits": [],
+                 "statusCheckRollup": []},               # BEHIND -> WAITING_ON_ME
+            50: {"reviewDecision": "APPROVED", "mergeStateStatus": "BLOCKED",
+                 "mergeable": "MERGEABLE", "reviews": [], "commits": [],
+                 "statusCheckRollup": []},               # approved, healthy -> THEM
+        }
+        now = _dt.datetime(2026, 8, 10, tzinfo=_dt.timezone.utc)
+        out = g.other_prs_needing_attention(
+            "o/r", "me", 7036, now, gh=self._gh_factory(listing, details))
+        self.assertEqual([p["number"] for p in out], [40])  # 7036 excluded, 50 healthy
+
+    def test_empty_when_none_need_attention(self):
+        listing = [{"number": 50, "title": "healthy", "url": "u50",
+                    "createdAt": "x", "updatedAt": "2026-08-09T00:00:00Z"}]
+        details = {50: {"reviewDecision": "APPROVED", "mergeStateStatus": "BLOCKED",
+                        "mergeable": "MERGEABLE", "reviews": [], "commits": [],
+                        "statusCheckRollup": []}}
+        now = _dt.datetime(2026, 8, 10, tzinfo=_dt.timezone.utc)
+        out = g.other_prs_needing_attention(
+            "o/r", "me", 999, now, gh=self._gh_factory(listing, details))
+        self.assertEqual(out, [])
+
+
 if __name__ == "__main__":
     unittest.main()
