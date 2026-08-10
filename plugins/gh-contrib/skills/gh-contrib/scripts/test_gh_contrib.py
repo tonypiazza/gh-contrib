@@ -1045,5 +1045,79 @@ class TestResolveGoneStates(unittest.TestCase):
         self.assertEqual(out, [])
 
 
+class TestRenderDelta(unittest.TestCase):
+    def test_first_run(self):
+        out = g.render_delta({"baseline": "first", "new": [], "court_changed": [],
+                              "gone": []}, [], glyphs=True)
+        self.assertIn("baseline established", out.lower())
+
+    def test_stale(self):
+        out = g.render_delta({"baseline": "stale", "new": [], "court_changed": [],
+                              "gone": []}, [], glyphs=True)
+        self.assertIn("showing current state only", out.lower())
+
+    def test_no_changes(self):
+        out = g.render_delta({"baseline": "ok", "new": [], "court_changed": [],
+                              "gone": []}, [], glyphs=True)
+        self.assertIn("no changes since your last run", out.lower())
+
+    def test_merged_is_celebrated(self):
+        gone = [{"url": "u1", "number": 123, "kind": "pr",
+                 "title": "big feature", "state": "MERGED"}]
+        delta = {"baseline": "ok", "new": [], "court_changed": [],
+                 "gone": ["u1"]}
+        out = g.render_delta(delta, gone, glyphs=True)
+        self.assertIn("#123", out)
+        self.assertIn("🎉", out)
+        self.assertRegex(out.lower(), r"merged|nice work|landing")
+
+    def test_closed_unmerged_distinct_from_merged(self):
+        gone = [{"url": "u2", "number": 9, "kind": "pr",
+                 "title": "abandoned", "state": "CLOSED"}]
+        out = g.render_delta({"baseline": "ok", "new": [], "court_changed": [],
+                              "gone": ["u2"]}, gone, glyphs=True)
+        self.assertIn("#9", out)
+        self.assertIn("closed", out.lower())
+        self.assertNotIn("🎉", out)
+
+    def test_court_flip_shown(self):
+        delta = {"baseline": "ok", "new": [],
+                 "court_changed": [{"url": "u1", "from": "WAITING_ON_THEM",
+                                    "to": "WAITING_ON_ME"}],
+                 "gone": []}
+        out = g.render_delta(delta, [], glyphs=True)
+        self.assertIn("u1", out)
+
+    def test_new_item_listed(self):
+        delta = {"baseline": "ok", "new": ["https://github.com/o/r/pull/500"],
+                 "court_changed": [], "gone": []}
+        out = g.render_delta(delta, [], glyphs=True)
+        self.assertIn("✨", out)
+        self.assertIn("https://github.com/o/r/pull/500", out)
+
+    def test_combined_sections_and_order(self):
+        gone = [
+            {"url": "um", "number": 1, "kind": "pr", "title": "merged one",
+             "state": "MERGED"},
+            {"url": "uc", "number": 2, "kind": "pr", "title": "closed one",
+             "state": "CLOSED"},
+        ]
+        delta = {"baseline": "ok",
+                 "new": ["https://github.com/o/r/pull/9"],
+                 "court_changed": [{"url": "uf", "from": "WAITING_ON_THEM",
+                                    "to": "WAITING_ON_ME"}],
+                 "gone": ["um", "uc"]}
+        out = g.render_delta(delta, gone, glyphs=True)
+        # all four categories present
+        self.assertIn("#1", out)
+        self.assertIn("#2", out)
+        self.assertIn("uf", out)
+        self.assertIn("https://github.com/o/r/pull/9", out)
+        # section order: merged before closed before flip before new
+        self.assertLess(out.index("#1"), out.index("#2"))
+        self.assertLess(out.index("#2"), out.index("uf"))
+        self.assertLess(out.index("uf"), out.index("pull/9"))
+
+
 if __name__ == "__main__":
     unittest.main()

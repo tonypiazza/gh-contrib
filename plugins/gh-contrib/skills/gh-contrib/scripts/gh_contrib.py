@@ -705,6 +705,46 @@ def render_pr_detail(repo, pr, others, glyphs=True):
     return "\n".join(lines) + "\n"
 
 
+def render_delta(delta, gone_states, glyphs=True):
+    """Render the leading 'What changed since last run' block (pure).
+
+    A MERGED item gets a warm, congratulatory line (deliberate — the one place
+    the tool expresses warmth). CLOSED-unmerged is stated plainly, not celebrated.
+    The `glyphs` param is accepted for signature consistency; this phase always
+    uses the emoji markers (the merge celebration is the point).
+    """
+    baseline = delta.get("baseline")
+    if baseline == "first":
+        return "**What changed** — _First run for this scope; baseline established._\n"
+    if baseline == "stale":
+        return ("**What changed** — _Last snapshot was over "
+                f"{SNAPSHOT_MAX_AGE_DAYS} days ago; showing current state only._\n")
+
+    gone_by_url = {g_["url"]: g_ for g_ in gone_states}
+    merged = [gone_by_url[u] for u in delta["gone"]
+              if gone_by_url.get(u, {}).get("state") == "MERGED"]
+    closed = [gone_by_url[u] for u in delta["gone"]
+              if gone_by_url.get(u, {}).get("state") not in ("MERGED", None)]
+    flips = delta["court_changed"]
+    new = delta["new"]
+
+    if not (merged or closed or flips or new):
+        return "**What changed** — _No changes since your last run._\n"
+
+    lines = ["**What changed since your last run**", ""]
+    for m in merged:
+        lines.append(f"- 🎉 Merged: #{m['number']} {m['title']} — nice work landing that.")
+    for c in closed:
+        lines.append(f"- ⚫ Closed: #{c['number']} {c['title']}")
+    for f in flips:
+        arrow = f"{f['from']} → {f['to']}"
+        lines.append(f"- ↔ Court changed ({arrow}): {f['url']}")
+    for u in new:
+        lines.append(f"- ✨ New: {u}")
+    lines.append("")
+    return "\n".join(lines)
+
+
 def build_parser():
     p = argparse.ArgumentParser(
         prog="gh_contrib.py",
