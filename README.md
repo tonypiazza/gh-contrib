@@ -25,11 +25,15 @@ Add the marketplace and install the plugin:
 
 Inside a checkout of a GitHub repository you contribute to:
 
-- `/gh-contrib --repo` — your open PRs and issues in the current repo, grouped by
-  whose court the ball is in.
+- `/gh-contrib` (no flags) — if your current branch has an open PR of yours, shows a
+  focused view of **that PR**: review state, CI, base-branch movement, and a one-line
+  heads-up if any of your other open PRs need attention. On a branch with no PR of yours,
+  it lists your open items in the repo instead.
+- `/gh-contrib --repo` — your open PRs and issues across the whole current repo, grouped
+  by whose court the ball is in (use this to override current-PR mode on a PR branch).
 - `/gh-contrib --repo --issues` — issues only. `--prs` for PRs only.
-- `/gh-contrib --repo --json` — raw JSON (for scripting).
-- `/gh-contrib --repo --no-glyphs` — ASCII status markers instead of emoji.
+- `/gh-contrib --json` — raw JSON (for scripting); works with any of the above.
+- `/gh-contrib --no-glyphs` — ASCII status markers instead of emoji.
 
 You can also just ask in natural language ("what's the status of my PRs here?").
 
@@ -62,9 +66,14 @@ Classification uses event ordering, not GitHub's raw status: a PR still labeled
 "changes requested" is correctly shown as waiting on maintainers once you've pushed
 commits addressing the feedback.
 
-Arriving in later versions: current-PR mode (deep view of the PR on your branch),
-AI attribution (which failing files are AI-authored, and suggested fixes), org/all
-breadth across many repos, and the setup/history commands.
+**Current-PR mode** (the bare `/gh-contrib` on a PR branch) focuses on the PR you're
+working on and includes a one-line footer for any of your *other* open PRs that
+currently need attention. That footer reflects each PR's current state; a true
+"what changed since last run" view comes with the history/snapshot work later.
+
+Arriving in later versions: AI attribution (which failing files are AI-authored, and
+suggested fixes), org/all breadth across many repos, the "what changed since last run"
+delta, and the setup/history commands.
 
 ## License
 
