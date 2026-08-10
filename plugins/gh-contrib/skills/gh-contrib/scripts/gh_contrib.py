@@ -262,6 +262,53 @@ def snapshot_path(scope_id, env=None):
     return f"{state_dir(env=env)}/{safe}.json"
 
 
+def fingerprint(items):
+    """Reduce items to a {url: {number, kind, title, court}} snapshot dict."""
+    return {
+        it["url"]: {
+            "number": it.get("number"),
+            "kind": it.get("kind"),
+            "title": it.get("title"),
+            "court": it.get("court"),
+        }
+        for it in items if it.get("url")
+    }
+
+
+def _default_writer(path, text):
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w") as fh:
+        fh.write(text)
+
+
+def _default_reader(path):
+    with open(path) as fh:
+        return fh.read()
+
+
+def save_snapshot(scope_id, items, now, writer=None, env=None):
+    """Overwrite the scope's snapshot with the current fingerprint + timestamp."""
+    writer = writer or _default_writer
+    payload = {
+        "savedAt": now.strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "items": fingerprint(items),
+    }
+    writer(snapshot_path(scope_id, env=env), json.dumps(payload, indent=2))
+
+
+def load_snapshot(scope_id, reader=None, env=None):
+    """Return (fingerprint_dict, savedAt) from the scope's snapshot, or (None, None)."""
+    reader = reader or _default_reader
+    try:
+        text = reader(snapshot_path(scope_id, env=env))
+        data = json.loads(text)
+    except (OSError, ValueError, TypeError):
+        return None, None
+    if not isinstance(data, dict):
+        return None, None
+    return data.get("items"), data.get("savedAt")
+
+
 _EDIT_TOOLS = ("Edit", "Write", "MultiEdit", "NotebookEdit")
 
 

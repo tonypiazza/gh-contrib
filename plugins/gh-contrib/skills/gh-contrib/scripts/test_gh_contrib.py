@@ -898,5 +898,48 @@ class TestSnapshotPaths(unittest.TestCase):
         self.assertEqual(p, "/Users/x/.gh-contrib/state/pr-o-r-7036.json")
 
 
+class TestSnapshotIO(unittest.TestCase):
+    def _items(self):
+        return [
+            {"kind": "pr", "number": 1, "title": "A", "url": "u1",
+             "court": g.COURT_WAITING_ON_ME},
+            {"kind": "issue", "number": 2, "title": "B", "url": "u2",
+             "court": g.COURT_WAITING_ON_THEM},
+        ]
+
+    def test_fingerprint_shape(self):
+        fp = g.fingerprint(self._items())
+        self.assertEqual(fp, {
+            "u1": {"number": 1, "kind": "pr", "title": "A",
+                   "court": g.COURT_WAITING_ON_ME},
+            "u2": {"number": 2, "kind": "issue", "title": "B",
+                   "court": g.COURT_WAITING_ON_THEM},
+        })
+
+    def test_save_then_load_roundtrip(self):
+        store = {}
+        writer = lambda path, text: store.__setitem__(path, text)
+        reader = lambda path: store[path]  # KeyError if absent
+        now = _dt.datetime(2026, 8, 10, tzinfo=_dt.timezone.utc)
+        g.save_snapshot("repo:o/r", self._items(), now,
+                        writer=writer, env={"HOME": "/h"})
+        fp, saved_at = g.load_snapshot("repo:o/r", reader=reader, env={"HOME": "/h"})
+        self.assertEqual(fp["u1"]["court"], g.COURT_WAITING_ON_ME)
+        self.assertEqual(saved_at, "2026-08-10T00:00:00Z")
+
+    def test_load_absent_returns_none(self):
+        def reader(path):
+            raise FileNotFoundError(path)
+        fp, saved_at = g.load_snapshot("repo:o/r", reader=reader, env={"HOME": "/h"})
+        self.assertIsNone(fp)
+        self.assertIsNone(saved_at)
+
+    def test_load_malformed_returns_none(self):
+        reader = lambda path: "not json{"
+        fp, saved_at = g.load_snapshot("repo:o/r", reader=reader, env={"HOME": "/h"})
+        self.assertIsNone(fp)
+        self.assertIsNone(saved_at)
+
+
 if __name__ == "__main__":
     unittest.main()
