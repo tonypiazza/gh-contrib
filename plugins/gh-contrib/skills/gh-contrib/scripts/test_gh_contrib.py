@@ -105,5 +105,68 @@ class TestResolveRepo(unittest.TestCase):
             g.resolve_repo(runner=runner)
 
 
+class TestNormalizeAndClassify(unittest.TestCase):
+    def test_normalize_pr(self):
+        raw = {"number": 7036, "title": "rss rewrite",
+               "url": "https://github.com/o/r/pull/7036",
+               "createdAt": "2026-07-01T00:00:00Z",
+               "updatedAt": "2026-08-01T00:00:00Z"}
+        item = g.normalize_item(raw, kind="pr")
+        self.assertEqual(item["number"], 7036)
+        self.assertEqual(item["kind"], "pr")
+        self.assertEqual(item["url"], "https://github.com/o/r/pull/7036")
+
+    def test_normalize_issue(self):
+        raw = {"number": 10, "title": "RFC",
+               "url": "https://github.com/o/r/issues/10",
+               "createdAt": "2026-07-01T00:00:00Z",
+               "updatedAt": "2026-07-02T00:00:00Z"}
+        item = g.normalize_item(raw, kind="issue")
+        self.assertEqual(item["kind"], "issue")
+
+    def test_classify_court_placeholder_is_waiting_on_them(self):
+        item = g.normalize_item(
+            {"number": 1, "title": "t", "url": "u",
+             "createdAt": "2026-07-01T00:00:00Z",
+             "updatedAt": "2026-07-02T00:00:00Z"},
+            kind="pr",
+        )
+        self.assertEqual(g.classify_court(item), "WAITING_ON_THEM")
+
+    def test_dedupe_by_url(self):
+        a = g.normalize_item({"number": 1, "title": "t", "url": "same",
+                              "createdAt": "x", "updatedAt": "y"}, kind="pr")
+        b = g.normalize_item({"number": 1, "title": "t", "url": "same",
+                              "createdAt": "x", "updatedAt": "y"}, kind="issue")
+        deduped = g.dedupe_by_url([a, b])
+        self.assertEqual(len(deduped), 1)
+
+
+class TestFetchItems(unittest.TestCase):
+    def _gh(self, prs, issues):
+        def gh(args):
+            return prs if "prs" in args else issues
+        return gh
+
+    def test_filters_pull_requests_from_issues(self):
+        issues = [
+            {"number": 1, "url": "u1", "isPullRequest": True},
+            {"number": 2, "url": "u2", "isPullRequest": False},
+        ]
+        out = g.fetch_items("o/r", False, True, gh=self._gh([], issues))
+        self.assertEqual([i["number"] for i in out], [2])
+
+    def test_dedupes_across_pr_and_issue_union(self):
+        prs = [{"number": 1, "url": "same"}]
+        issues = [{"number": 1, "url": "same", "isPullRequest": True}]
+        out = g.fetch_items("o/r", True, True, gh=self._gh(prs, issues))
+        self.assertEqual(len(out), 1)
+        self.assertEqual(out[0]["kind"], "pr")
+
+    def test_both_false_returns_empty(self):
+        out = g.fetch_items("o/r", False, False, gh=self._gh([], []))
+        self.assertEqual(out, [])
+
+
 if __name__ == "__main__":
     unittest.main()

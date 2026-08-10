@@ -127,5 +127,69 @@ def resolve_repo(runner=None):
     return repo
 
 
+COURT_WAITING_ON_ME = "WAITING_ON_ME"
+COURT_WAITING_ON_THEM = "WAITING_ON_THEM"
+COURT_STALE_NUDGE = "STALE_NUDGE"
+COURT_QUIET = "QUIET"
+
+
+def normalize_item(raw, kind):
+    """Normalize a gh search result into the common item shape."""
+    return {
+        "kind": kind,  # "pr" or "issue"
+        "number": raw.get("number"),
+        "title": raw.get("title") or "",
+        "url": raw.get("url") or "",
+        "createdAt": raw.get("createdAt"),
+        "updatedAt": raw.get("updatedAt"),
+    }
+
+
+def classify_court(item):
+    """Phase-1 placeholder: an item you authored is, by default, awaiting others.
+
+    Phase 2 replaces this with event-ordering logic (review state, CI, base
+    movement). Kept intentionally trivial so Phase 1 ships without prematurely
+    implementing correctness-critical logic.
+    """
+    return COURT_WAITING_ON_THEM
+
+
+def dedupe_by_url(items):
+    """Drop duplicate items sharing a URL, preserving first-seen order."""
+    seen = set()
+    out = []
+    for it in items:
+        key = it.get("url")
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append(it)
+    return out
+
+
+def fetch_items(repo, want_prs, want_issues, gh=run_gh):
+    """Fetch the authenticated user's open PRs/issues in `repo` as @me."""
+    items = []
+    if want_prs:
+        prs = gh([
+            "search", "prs", "--author=@me", f"--repo={repo}",
+            "--state=open", "--json", "number,title,url,createdAt,updatedAt",
+        ])
+        items.extend(normalize_item(p, kind="pr") for p in prs)
+    if want_issues:
+        issues = gh([
+            "search", "issues", "--author=@me", f"--repo={repo}",
+            "--state=open", "--json",
+            "number,title,url,createdAt,updatedAt,isPullRequest",
+        ])
+        # gh search issues can include PRs; keep only true issues.
+        items.extend(
+            normalize_item(i, kind="issue")
+            for i in issues if not i.get("isPullRequest")
+        )
+    return dedupe_by_url(items)
+
+
 if __name__ == "__main__":  # pragma: no cover - wired up in Task 6
     pass
