@@ -1506,5 +1506,50 @@ class TestRenderDenseShowRepo(unittest.TestCase):
         self.assertIn("#1", out)
 
 
+class TestBreadthScope(unittest.TestCase):
+    def _ns(self, argv):
+        return g.build_parser().parse_args(argv)
+
+    def test_org_named(self):
+        label, owners, repos, inv = g.breadth_scope(
+            self._ns(["--org", "acme"]), "x/y", g.default_config())
+        self.assertEqual((label, owners, repos, inv),
+                         ("acme (org)", ["acme"], [], ["authored"]))
+
+    def test_org_bare_from_repo(self):
+        label, owners, repos, inv = g.breadth_scope(
+            self._ns(["--org"]), "opensearch-project/data-prepper",
+            g.default_config())
+        self.assertEqual(owners, ["opensearch-project"])
+        self.assertEqual(inv, ["authored"])
+
+    def test_all_uses_config_scope(self):
+        cfg = {"digestScope": {"orgs": ["o1"], "repos": ["a/b"],
+                               "involvement": ["authored", "involves"]}}
+        label, owners, repos, inv = g.breadth_scope(
+            self._ns(["--all"]), "x/y", cfg)
+        self.assertEqual(owners, ["o1"])
+        self.assertEqual(repos, ["a/b"])
+        self.assertEqual(inv, ["authored", "involves"])
+        self.assertEqual(label, "your configured scope")
+
+    def test_all_empty_scope_exits(self):
+        with self.assertRaises(SystemExit):
+            g.breadth_scope(self._ns(["--all"]), "x/y", g.default_config())
+
+
+class TestBreadthCapNotice(unittest.TestCase):
+    def test_no_notice_under_cap(self):
+        self.assertEqual(g.breadth_cap_notice(50, cap=100), "")
+
+    def test_no_notice_at_cap(self):
+        self.assertEqual(g.breadth_cap_notice(100, cap=100), "")
+
+    def test_notice_over_cap(self):
+        n = g.breadth_cap_notice(150, cap=100)
+        self.assertIn("first 100 PRs", n)
+        self.assertIn("search signals only", n)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -501,6 +501,36 @@ def attributed_files(touched, changed):
     ]
 
 
+BREADTH_ENRICH_CAP = 100  # bound per-PR enrichment calls in breadth
+
+
+def breadth_scope(ns, repo, config):
+    """Resolve a breadth request into (label, owners, repos, involvement).
+
+    --org [NAME]: one org (named or the current repo's owner), authored only.
+    --all: the configured digestScope; exits if that scope is empty.
+    """
+    if ns.org is not None:
+        org = resolve_org(ns.org, repo)
+        return f"{org} (org)", [org], [], ["authored"]
+    scope = config.get("digestScope") or {}
+    owners = scope.get("orgs") or []
+    repos = scope.get("repos") or []
+    involvement = scope.get("involvement") or ["authored"]
+    if not owners and not repos:
+        sys.exit("error: --all has no digest scope configured. "
+                 "Run `/gh-contrib-setup` to set orgs/repos to survey.")
+    return "your configured scope", owners, repos, involvement
+
+
+def breadth_cap_notice(pr_count, cap=BREADTH_ENRICH_CAP):
+    """Return a one-line cap notice if pr_count exceeds cap, else ''."""
+    if pr_count > cap:
+        return (f"_Note: enriched the first {cap} PRs; the rest are classified "
+                f"from search signals only._")
+    return ""
+
+
 def resolve_login(runner=None):
     """Return the authenticated user's login (for excluding their own reviews).
 
@@ -968,10 +998,6 @@ def config_stale_days(config):
 def main(argv=None):
     ns = validate_flags(build_parser().parse_args(argv))
 
-    # Phase 1 supports Level 1 only. --org/--all arrive in Phase 4.
-    if ns.org is not None or ns.all:
-        sys.exit("error: --org and --all are not available yet (later phase). "
-                 "Use --repo for the current repository.")
     if ns.rich:
         sys.exit("error: --rich is not available yet (later phase).")
 
@@ -981,6 +1007,31 @@ def main(argv=None):
     config = load_config()
     stale_days = config_stale_days(config)
     glyphs = effective_glyphs(config, ns)
+
+    # Breadth: --org (one org) or --all (configured scope). No local checkout,
+    # so no AI attribution and no since-last-run delta here (current state only).
+    if ns.org is not None or ns.all:
+        label, owners, repos, involvement = breadth_scope(ns, repo, config)
+        want_prs, want_issues = resolve_types(ns)
+        items = fetch_scope(owners, repos, involvement, want_prs, want_issues)
+        pr_count = sum(1 for it in items if it["kind"] == "pr")
+        enriched = 0
+        for it in items:
+            if it["kind"] == "pr" and it.get("repo") and enriched < BREADTH_ENRICH_CAP:
+                enrich_item(it, it["repo"], me)
+                enriched += 1
+            it["court"] = classify_court(it, now, stale_days=stale_days)
+        notice = breadth_cap_notice(pr_count)
+        if ns.json:
+            print(json.dumps({"scope": label, "items": items,
+                              "enrichCapped": bool(notice),
+                              "enrichedPrCount": enriched}, indent=2))
+            return
+        out = render_dense(label, items, glyphs=glyphs, show_repo=True)
+        if notice:
+            out = notice + "\n\n" + out
+        print(out)
+        return
 
     # Level 0: current-PR mode — a branch mapping to your open PR(s).
     # Exactly one -> focused view; more than one -> ask; none -> fall through.
