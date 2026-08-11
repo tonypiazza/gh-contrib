@@ -898,6 +898,21 @@ def level0_eligible(ns):
     return not (ns.repo or ns.org is not None or ns.all or ns.issues)
 
 
+def effective_glyphs(config, ns):
+    """Glyphs on unless config disables them or --no-glyphs is passed."""
+    config_glyphs = (config.get("display") or {}).get("glyphs", True)
+    return bool(config_glyphs) and not ns.no_glyphs
+
+
+def config_stale_days(config):
+    """staleDays from config as an int, or the default if missing/non-numeric."""
+    raw = (config.get("thresholds") or {}).get("staleDays", STALE_DAYS)
+    try:
+        return int(raw)
+    except (TypeError, ValueError):
+        return STALE_DAYS
+
+
 def main(argv=None):
     ns = validate_flags(build_parser().parse_args(argv))
 
@@ -911,6 +926,9 @@ def main(argv=None):
     repo = canonical_repo(resolve_repo())
     me = resolve_login()
     now = datetime.now(timezone.utc)
+    config = load_config()
+    stale_days = config_stale_days(config)
+    glyphs = effective_glyphs(config, ns)
 
     # Level 0: current-PR mode — a branch mapping to your open PR(s).
     # Exactly one -> focused view; more than one -> ask; none -> fall through.
@@ -920,11 +938,11 @@ def main(argv=None):
         if len(prs) == 1:
             pr = prs[0]
             enrich_item(pr, repo, me)
-            pr["court"] = classify_court(pr, now)
+            pr["court"] = classify_court(pr, now, stale_days=stale_days)
             touched = claude_touched_files(os.getcwd())
             pr["aiAuthoredFiles"] = attributed_files(
                 touched, pr_changed_files(repo, pr["number"]))
-            others = other_prs_needing_attention(repo, me, pr["number"], now)
+            others = other_prs_needing_attention(repo, me, pr["number"], now, stale_days=stale_days)
             delta, gone_states, prev_time = run_delta(
                 f"pr:{repo}#{pr['number']}", [pr], repo, now)
             if ns.json:
@@ -933,10 +951,10 @@ def main(argv=None):
                                   "delta": delta}, indent=2))
                 return
             delta_block = render_delta(delta, gone_states,
-                                       glyphs=not ns.no_glyphs,
+                                       glyphs=glyphs,
                                        prev_time=prev_time, now=now)
             print(delta_block + "\n"
-                  + render_pr_detail(repo, pr, others, glyphs=not ns.no_glyphs))
+                  + render_pr_detail(repo, pr, others, glyphs=glyphs))
             return
         if len(prs) > 1:
             refs = ", ".join(f"#{p['number']}" for p in prs)
@@ -948,16 +966,16 @@ def main(argv=None):
     items = fetch_items(repo, want_prs, want_issues)
     for it in items:
         enrich_item(it, repo, me)
-        it["court"] = classify_court(it, now)
+        it["court"] = classify_court(it, now, stale_days=stale_days)
 
     delta, gone_states, prev_time = run_delta(f"repo:{repo}", items, repo, now)
     if ns.json:
         print(json.dumps({"repo": repo, "items": items, "delta": delta},
                          indent=2))
         return
-    delta_block = render_delta(delta, gone_states, glyphs=not ns.no_glyphs,
+    delta_block = render_delta(delta, gone_states, glyphs=glyphs,
                                prev_time=prev_time, now=now)
-    print(delta_block + "\n" + render_dense(repo, items, glyphs=not ns.no_glyphs))
+    print(delta_block + "\n" + render_dense(repo, items, glyphs=glyphs))
 
 
 if __name__ == "__main__":

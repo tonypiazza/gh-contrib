@@ -1352,5 +1352,42 @@ class TestOtherPrsStaleDays(unittest.TestCase):
         self.assertEqual(out30, [])
 
 
+class TestEffectiveGlyphs(unittest.TestCase):
+    def _ns(self, no_glyphs):
+        return g.build_parser().parse_args(["--no-glyphs"] if no_glyphs else [])
+
+    def test_config_on_no_flag(self):
+        self.assertTrue(g.effective_glyphs({"display": {"glyphs": True}},
+                                           self._ns(False)))
+
+    def test_config_off(self):
+        self.assertFalse(g.effective_glyphs({"display": {"glyphs": False}},
+                                            self._ns(False)))
+
+    def test_flag_overrides_config_on(self):
+        self.assertFalse(g.effective_glyphs({"display": {"glyphs": True}},
+                                            self._ns(True)))
+
+    def test_missing_display_defaults_true(self):
+        self.assertTrue(g.effective_glyphs({}, self._ns(False)))
+
+
+class TestConfigStaleDays(unittest.TestCase):
+    def test_valid_int(self):
+        self.assertEqual(g.config_stale_days({"thresholds": {"staleDays": 30}}), 30)
+
+    def test_missing_uses_default(self):
+        self.assertEqual(g.config_stale_days({}), g.STALE_DAYS)
+
+    def test_non_numeric_uses_default(self):
+        self.assertEqual(
+            g.config_stale_days({"thresholds": {"staleDays": "soon"}}),
+            g.STALE_DAYS)
+
+    def test_numeric_string_coerces(self):
+        self.assertEqual(
+            g.config_stale_days({"thresholds": {"staleDays": "21"}}), 21)
+
+
 if __name__ == "__main__":
     unittest.main()
