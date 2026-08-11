@@ -1581,5 +1581,112 @@ class TestParseRef(unittest.TestCase):
             g.parse_ref("42", None)
 
 
+class TestBuildTimeline(unittest.TestCase):
+    def _pr_detail(self):
+        return {
+            "commits": [
+                {"committedDate": "2026-08-01T10:00:00Z",
+                 "messageHeadline": "initial", "oid": "aaaa1111"},
+                {"committedDate": "2026-08-06T15:32:00Z",
+                 "messageHeadline": "address review", "oid": "bbbb2222"},
+            ],
+            "reviews": [
+                {"submittedAt": "2026-08-06T15:10:00Z", "state": "CHANGES_REQUESTED",
+                 "author": {"login": "maint"}},
+                {"submittedAt": "2026-08-02T09:00:00Z", "state": "COMMENTED",
+                 "author": {"login": "maint"}},
+            ],
+            "comments": [
+                {"createdAt": "2026-08-03T12:00:00Z", "author": {"login": "me"}},
+            ],
+            "statusCheckRollup": [{"conclusion": "FAILURE"},
+                                  {"conclusion": "SUCCESS"},
+                                  {"conclusion": "SUCCESS"}],
+        }
+
+    def test_events_sorted_chronologically(self):
+        tl = g.build_timeline(self._pr_detail(), "pr")
+        times = [e["at"] for e in tl]
+        self.assertEqual(times, sorted(times))
+
+    def test_event_types_present(self):
+        tl = g.build_timeline(self._pr_detail(), "pr")
+        types = {e["type"] for e in tl}
+        self.assertEqual(types, {"commit", "review", "comment", "ci"})
+
+    def test_ci_event_summarizes_counts(self):
+        tl = g.build_timeline(self._pr_detail(), "pr")
+        ci = [e for e in tl if e["type"] == "ci"][0]
+        self.assertIn("1 failing", ci["summary"])
+        self.assertIn("2 passing", ci["summary"])
+
+    def test_review_summary_includes_state(self):
+        tl = g.build_timeline(self._pr_detail(), "pr")
+        cr = [e for e in tl if e["type"] == "review"
+              and "CHANGES_REQUESTED" in e["summary"]]
+        self.assertEqual(len(cr), 1)
+        self.assertEqual(cr[0]["actor"], "maint")
+
+    def test_issue_has_comments_only(self):
+        detail = {"comments": [
+            {"createdAt": "2026-08-03T12:00:00Z", "author": {"login": "me"}}]}
+        tl = g.build_timeline(detail, "issue")
+        self.assertEqual([e["type"] for e in tl], ["comment"])
+
+    def test_ci_event_omitted_when_no_checks(self):
+        detail = {"commits": [{"committedDate": "2026-08-01T10:00:00Z",
+                               "messageHeadline": "x", "oid": "a"}],
+                  "reviews": [], "comments": [], "statusCheckRollup": []}
+        tl = g.build_timeline(detail, "pr")
+        self.assertEqual([e["type"] for e in tl], ["commit"])
+
+    def test_all_neutral_ci_omitted(self):
+        detail = {"commits": [{"committedDate": "2026-08-01T10:00:00Z",
+                               "messageHeadline": "x", "oid": "a"}],
+                  "reviews": [], "comments": [],
+                  "statusCheckRollup": [{"conclusion": "SKIPPED"},
+                                        {"conclusion": "PENDING"}]}
+        tl = g.build_timeline(detail, "pr")
+        self.assertEqual([e["type"] for e in tl], ["commit"])  # no ci event
+
+    def test_actor_none_when_author_missing(self):
+        detail = {"commits": [{"committedDate": "2026-08-01T10:00:00Z",
+                               "messageHeadline": "x", "oid": "abcd1234"}],  # no authors
+                  "reviews": [{"submittedAt": "2026-08-02T00:00:00Z",
+                               "state": "COMMENTED"}],  # no author
+                  "comments": [{"createdAt": "2026-08-03T00:00:00Z"}],  # no author
+                  "statusCheckRollup": []}
+        tl = g.build_timeline(detail, "pr")
+        self.assertTrue(all(e["actor"] is None for e in tl))
+
+    def test_commit_summary_format(self):
+        detail = {"commits": [{"committedDate": "2026-08-01T10:00:00Z",
+                               "messageHeadline": "fix the thing",
+                               "oid": "abcd1234 effff"}],
+                  "reviews": [], "comments": [], "statusCheckRollup": []}
+        tl = g.build_timeline(detail, "pr")
+        self.assertEqual(tl[0]["summary"], "commit abcd1234: fix the thing")
+
+    def test_missing_timestamp_event_skipped(self):
+        detail = {"commits": [{"messageHeadline": "no date", "oid": "a"},  # no committedDate
+                              {"committedDate": "2026-08-01T10:00:00Z",
+                               "messageHeadline": "has date", "oid": "b"}],
+                  "reviews": [], "comments": [], "statusCheckRollup": []}
+        tl = g.build_timeline(detail, "pr")
+        self.assertEqual(len(tl), 1)  # dateless commit dropped, no exception
+        self.assertIn("has date", tl[0]["summary"])
+
+    def test_ci_event_at_latest_commit_time(self):
+        detail = {"commits": [{"committedDate": "2026-08-01T10:00:00Z",
+                               "messageHeadline": "a", "oid": "a"},
+                              {"committedDate": "2026-08-05T10:00:00Z",
+                               "messageHeadline": "b", "oid": "b"}],
+                  "reviews": [], "comments": [],
+                  "statusCheckRollup": [{"conclusion": "FAILURE"}]}
+        tl = g.build_timeline(detail, "pr")
+        ci = [e for e in tl if e["type"] == "ci"][0]
+        self.assertEqual(ci["at"], "2026-08-05T10:00:00Z")  # latest commit
+
+
 if __name__ == "__main__":
     unittest.main()

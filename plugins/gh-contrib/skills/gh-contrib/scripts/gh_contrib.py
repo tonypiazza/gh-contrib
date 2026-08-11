@@ -638,6 +638,50 @@ def classify_court(item, now, stale_days=STALE_DAYS):
     return COURT_WAITING_ON_THEM
 
 
+def build_timeline(detail, kind):
+    """Merge a PR/issue detail into one chronologically-sorted event list (pure).
+
+    Each event is {at, type, actor, summary}. Types: commit, review, comment, ci.
+    Issues have comments only. The CI event (if any checks) is a single synthesized
+    summary placed at the latest commit's time.
+    """
+    events = []
+    for c in (detail.get("commits") or []):
+        at = c.get("committedDate")
+        if at:
+            authors = c.get("authors") or []
+            actor = authors[0].get("login") if authors else None
+            events.append({"at": at, "type": "commit", "actor": actor,
+                           "summary": f"commit {(c.get('oid') or '')[:8]}: "
+                                      f"{c.get('messageHeadline') or ''}"})
+    for r in (detail.get("reviews") or []):
+        at = r.get("submittedAt")
+        if at:
+            events.append({"at": at, "type": "review",
+                           "actor": (r.get("author") or {}).get("login"),
+                           "summary": f"review: {r.get('state')}"})
+    for m in (detail.get("comments") or []):
+        at = m.get("createdAt")
+        if at:
+            events.append({"at": at, "type": "comment",
+                           "actor": (m.get("author") or {}).get("login"),
+                           "summary": "comment"})
+    rollup = detail.get("statusCheckRollup") or []
+    commit_times = [c.get("committedDate") for c in (detail.get("commits") or [])
+                    if c.get("committedDate")]
+    if rollup and commit_times:
+        failing = sum(1 for c in rollup
+                      if (c.get("conclusion") or c.get("state")) == "FAILURE")
+        passing = sum(1 for c in rollup
+                      if (c.get("conclusion") or c.get("state")) == "SUCCESS")
+        if failing or passing:  # skip all-neutral (all skipped/pending) -> no signal
+            events.append({"at": max(commit_times), "type": "ci", "actor": None,
+                           "summary": f"CI on latest commit: {failing} failing, "
+                                      f"{passing} passing"})
+    events.sort(key=lambda e: e["at"])
+    return events
+
+
 def describe_pr_state(pr):
     """Ordered human-readable status phrases for an enriched PR (pure).
 
