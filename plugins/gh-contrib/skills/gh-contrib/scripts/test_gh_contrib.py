@@ -1403,5 +1403,87 @@ class TestNormalizeItemRepo(unittest.TestCase):
         self.assertIsNone(g.normalize_item(raw, kind="pr")["repo"])
 
 
+class TestResolveOrg(unittest.TestCase):
+    def test_named_org(self):
+        self.assertEqual(g.resolve_org("acme", "owner/repo"), "acme")
+
+    def test_bare_org_uses_repo_owner(self):
+        self.assertEqual(g.resolve_org(True, "opensearch-project/data-prepper"),
+                         "opensearch-project")
+
+    def test_bare_org_no_repo_exits(self):
+        with self.assertRaises(SystemExit):
+            g.resolve_org(True, None)
+
+    def test_empty_string_org_falls_back_to_repo_owner(self):
+        self.assertEqual(g.resolve_org("", "acme/widget"), "acme")
+
+
+class TestFetchScope(unittest.TestCase):
+    def _gh(self, results_by_call):
+        calls = {"args": []}
+        seq = list(results_by_call)
+        def gh(args):
+            calls["args"].append(args)
+            return seq.pop(0) if seq else []
+        gh.calls = calls
+        return gh
+
+    def test_owner_authored_prs(self):
+        prs = [{"number": 1, "title": "a", "url": "u1", "createdAt": "x",
+                "updatedAt": "y", "repository": {"nameWithOwner": "acme/r1"}}]
+        gh = self._gh([prs])
+        out = g.fetch_scope(["acme"], [], ["authored"], True, False, gh=gh)
+        self.assertEqual(len(out), 1)
+        self.assertEqual(out[0]["repo"], "acme/r1")
+        joined = " ".join(gh.calls["args"][0])
+        self.assertIn("--owner=acme", joined)
+        self.assertIn("--author=@me", joined)
+
+    def test_dedupes_across_involvement(self):
+        pr = {"number": 1, "title": "a", "url": "same", "createdAt": "x",
+              "updatedAt": "y", "repository": {"nameWithOwner": "acme/r1"}}
+        gh = self._gh([[pr], [pr]])
+        out = g.fetch_scope(["acme"], [], ["authored", "involves"], True, False, gh=gh)
+        self.assertEqual(len(out), 1)
+
+    def test_repos_and_issue_filtering(self):
+        issues = [{"number": 5, "title": "i", "url": "ui", "createdAt": "x",
+                   "updatedAt": "y", "isPullRequest": False,
+                   "repository": {"nameWithOwner": "acme/r2"}},
+                  {"number": 6, "title": "p", "url": "up", "createdAt": "x",
+                   "updatedAt": "y", "isPullRequest": True,
+                   "repository": {"nameWithOwner": "acme/r2"}}]
+        gh = self._gh([issues])
+        out = g.fetch_scope([], ["acme/r2"], ["authored"], False, True, gh=gh)
+        self.assertEqual([i["number"] for i in out], [5])
+
+    def test_multiple_scope_targets_produce_separate_searches(self):
+        gh = self._gh([[], [], []])  # owner + 2 repos, authored, prs only
+        g.fetch_scope(["acme"], ["a/b", "c/d"], ["authored"], True, False, gh=gh)
+        joined = [" ".join(a) for a in gh.calls["args"]]
+        self.assertEqual(len(joined), 3)
+        self.assertTrue(any("--owner=acme" in j for j in joined))
+        self.assertTrue(any("--repo=a/b" in j for j in joined))
+        self.assertTrue(any("--repo=c/d" in j for j in joined))
+
+    def test_prs_and_issues_both_searched(self):
+        gh = self._gh([[], []])  # one owner, authored: 1 prs call + 1 issues call
+        g.fetch_scope(["acme"], [], ["authored"], True, True, gh=gh)
+        kinds = [a[1] for a in gh.calls["args"]]  # args[1] is "prs" or "issues"
+        self.assertEqual(sorted(kinds), ["issues", "prs"])
+
+    def test_unknown_involvement_ignored(self):
+        gh = self._gh([])
+        out = g.fetch_scope(["acme"], [], ["bogus"], True, True, gh=gh)
+        self.assertEqual(out, [])
+        self.assertEqual(gh.calls["args"], [])  # no searches for an unknown mode
+
+    def test_duplicate_involvement_deduped(self):
+        gh = self._gh([[], []])
+        g.fetch_scope(["acme"], [], ["authored", "authored"], True, False, gh=gh)
+        self.assertEqual(len(gh.calls["args"]), 1)  # deduped to one search
+
+
 if __name__ == "__main__":
     unittest.main()

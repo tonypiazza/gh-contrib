@@ -640,6 +640,55 @@ def fetch_items(repo, want_prs, want_issues, gh=run_gh):
     return dedupe_by_url(items)
 
 
+_INVOLVEMENT_FLAGS = {
+    "authored": "--author=@me",
+    "involves": "--involves=@me",
+    "review-requested": "--review-requested=@me",
+    "assignee": "--assignee=@me",
+}
+
+
+def resolve_org(ns_org, repo):
+    """The org to scope --org to: a named org, or the current repo's owner."""
+    if isinstance(ns_org, str) and ns_org:
+        return ns_org
+    if repo:
+        return repo.split("/")[0]
+    sys.exit("error: --org outside a repo needs a name, e.g. `--org acme` "
+             "(or use --all for your configured scope).")
+
+
+def _scope_search(kind, scope_flag, involvement_flag, gh):
+    fields = "number,title,url,createdAt,updatedAt,repository"
+    if kind == "issues":
+        fields += ",isPullRequest"
+    return gh(["search", kind, involvement_flag, scope_flag,
+               "--state=open", "--json", fields])
+
+
+def fetch_scope(owners, repos, involvement, want_prs, want_issues, gh=run_gh):
+    """Union of the user's open PRs/issues across owners/repos x involvement.
+
+    One search per (scope target x involvement); results normalized (with repo)
+    and deduped by URL. Unknown involvement modes are ignored.
+    """
+    scope_flags = ([f"--owner={o}" for o in owners]
+                   + [f"--repo={r}" for r in repos])
+    inv_flags = list(dict.fromkeys(
+        _INVOLVEMENT_FLAGS[m] for m in involvement if m in _INVOLVEMENT_FLAGS))
+    items = []
+    for scope_flag in scope_flags:
+        for inv in inv_flags:
+            if want_prs:
+                for p in _scope_search("prs", scope_flag, inv, gh):
+                    items.append(normalize_item(p, kind="pr"))
+            if want_issues:
+                for i in _scope_search("issues", scope_flag, inv, gh):
+                    if not i.get("isPullRequest"):
+                        items.append(normalize_item(i, kind="issue"))
+    return dedupe_by_url(items)
+
+
 _PR_DETAIL_FIELDS = ("number,reviewDecision,mergeable,mergeStateStatus,"
                      "updatedAt,isDraft,reviews,commits,statusCheckRollup")
 
