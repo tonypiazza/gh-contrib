@@ -11,30 +11,18 @@ only as the authenticated user. Scopes: the current PR (bare, on a PR branch), t
 current repo (`--repo`), an org (`--org [NAME]`), or your configured digest scope
 (`--all`).
 
-Run this and show the output to the user verbatim (it is already formatted
-markdown). If the script exits with an error, relay the error and its suggested
-fix; do not fabricate a digest.
-
 ```bash
 python3 "${CLAUDE_PLUGIN_ROOT}/skills/gh-contrib/scripts/gh_contrib.py" $ARGUMENTS
 ```
 
-## When the output lists AI-authored files
+Show the script's output to the user verbatim (it is already formatted markdown),
+then **stop**. If the script exits with an error, relay the error and its suggested
+fix; do not fabricate a digest.
 
-The AI-authored file list is a learning aid, not a blame list: it shows where to
-focus review of AI-generated code and which model wrote it. If the digest reports
-AI-authored files in a PR that is `CI_SUSPECT` or has changes requested, and you are
-in a local checkout of that repo:
-
-1. Look at the local diff for those files (e.g. `git diff origin/main...HEAD -- <file>`),
-   focused on the ones the maintainer flagged or that CI implicates.
-2. Explain the likely cause in plain terms, and propose a concrete fix.
-3. If feedback/CI keeps landing on AI-authored files, note it as a place to review AI
-   code more carefully — and, if a weaker model wrote the problematic files, that a
-   stronger model may fit that work better.
-4. Be honest about certainty: file-level attribution means the model edited the file,
-   not that a specific line is the defect. If you cannot pin the cause from the diff,
-   say so. Never frame a maintainer's request as the user's fault — lead with the fix.
-
-Do this only on request or when the user is clearly working the PR; do not
-auto-run large diffs unprompted.
+Run only the one command above. Do not run any other `gh`, `git`, or shell commands
+as a result of this digest — no `gh run view`, no `gh api`, no log-scraping, no diffs,
+no fetching anything the script didn't return. The digest's own lines (e.g. "CI failing
+on latest commit — check whether it's yours") are notes for the user, not cues for you
+to investigate. If the user later asks a follow-up ("why is CI failing?", "dig into this
+PR"), handle it as an ordinary request in conversation — this command's job is done once
+the digest is shown.

@@ -1,7 +1,6 @@
 {
   "name": "gh-contrib",
   "description": "Track your own GitHub contributions via the gh CLI: whose court each PR/issue is in, what needs action, and what to nudge.",
-  "version": "0.1.0",
   "author": {
     "name": "Tony Piazza"
   }

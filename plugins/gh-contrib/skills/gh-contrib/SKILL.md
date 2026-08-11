@@ -22,25 +22,12 @@ Run the engine, passing through any flags the user mentioned. Use
 python3 "${CLAUDE_SKILL_DIR}/scripts/gh_contrib.py" --repo
 ```
 
-Flags (Phase 1): `--repo` (current repo), `--issues` / `--prs` (type filter),
-`--json` (raw), `--no-glyphs` (ASCII markers).
+Flags: `--repo` (current repo), `--org [NAME]` / `--all` (breadth), `--issues` / `--prs`
+(type filter), `--json` (raw), `--no-glyphs` (ASCII markers). Bare (no scope flag) on a
+PR branch shows the current PR.
 
-Show the script's output to the user verbatim — it is already formatted markdown.
-On error, relay the message and its fix; never fabricate a digest.
-
-## IMPORTANT NOTES ON EXACT CONTENT
-
-- Both files begin with a YAML frontmatter block delimited by lines containing exactly three hyphens (`---`).
-- Preserve the em-dashes (—) exactly as shown; do not convert them to hyphens.
-- The command file's bash fence uses `${CLAUDE_PLUGIN_ROOT}` and `$ARGUMENTS`.
-- The skill file's bash fence uses `${CLAUDE_SKILL_DIR}`.
-- Note the skills directory `plugins/gh-contrib/skills/gh-contrib/` already exists (it contains scripts/). The commands directory `plugins/gh-contrib/commands/` does NOT exist yet — create it.
-
-## AI-authored files
-
-The AI-authored file list (with model) is a learning aid: where to focus review of
-AI-generated code, and which model wrote it. When it flags files on a problematic PR
-and you're in a local checkout, offer to read those files' diffs and explain the
-likely defect and a fix. Attribution is file-level (the model edited the file) — flag
-where to look and which model, don't assert a specific line is the bug, and never
-frame the maintainer's request as the user's fault.
+Show the script's output to the user verbatim — it is already formatted markdown — then
+stop. On error, relay the message and its fix; never fabricate a digest. Run only the
+script; do not run other `gh`/`git`/shell commands or investigate further off the back of
+the digest. If the user asks a follow-up ("why is CI failing?", "dig into this PR"), handle
+it as an ordinary conversational request, not as part of this skill.
