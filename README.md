@@ -42,6 +42,31 @@ plugin detects when your `origin` is a fork and automatically resolves to the
 upstream repository you forked from, so it finds the PRs and issues you actually
 opened there.
 
+## Configuration
+
+Configuration is **optional** — with no config file the plugin uses sensible defaults
+(staleness threshold 14 days, emoji glyphs on). Run `/gh-contrib-setup` to create or
+update `~/.gh-contrib/config.json`:
+
+```json
+{
+  "digestScope": {"orgs": [], "repos": [], "involvement": ["authored"]},
+  "thresholds": {"staleDays": 14},
+  "display": {"glyphs": true}
+}
+```
+
+- **`thresholds.staleDays`** — how many days without activity before an item is a
+  "nudge" candidate.
+- **`display.glyphs`** — emoji status markers (`true`) or ASCII markers like `[ME]`
+  (`false`). The `--no-glyphs` flag overrides this per-run.
+- **`digestScope`** — the orgs/repos/involvement for the cross-repo `--all` view. Stored
+  now; consumed once `--all` breadth lands (not available yet).
+
+The config is read tolerantly: a missing, partial, or malformed file falls back to
+defaults rather than erroring. No account is stored — the plugin always operates as the
+authenticated `gh` user.
+
 ## Design notes
 
 - **Single machine per repo.** Provenance and history features (later versions)
