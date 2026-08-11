@@ -32,8 +32,19 @@ Inside a checkout of a GitHub repository you contribute to:
 - `/gh-contrib --repo` — your open PRs and issues across the whole current repo, grouped
   by whose court the ball is in (use this to override current-PR mode on a PR branch).
 - `/gh-contrib --repo --issues` — issues only. `--prs` for PRs only.
+- `/gh-contrib --org [NAME]` — your open PRs and issues across a whole org: the current
+  repo's org, or a named one (`--org acme`). Items are grouped by court and labeled with
+  their repository.
+- `/gh-contrib --all` — your open items across the digest scope you configured with
+  `/gh-contrib-setup` (orgs, repos, involvement modes). Run setup first to define it.
 - `/gh-contrib --json` — raw JSON (for scripting); works with any of the above.
 - `/gh-contrib --no-glyphs` — ASCII status markers instead of emoji.
+
+**Breadth cost & scope.** `--org`/`--all` run one GitHub search per (org/repo × involvement
+mode), so a broad `--all` scope means more calls; keep the configured scope focused. In
+breadth views the plugin shows each item's current court but does **not** compute the
+"what changed since last run" delta or AI attribution — those need a local checkout and
+are only available in the repo and current-PR views.
 
 You can also just ask in natural language ("what's the status of my PRs here?").
 
@@ -60,8 +71,8 @@ update `~/.gh-contrib/config.json`:
   "nudge" candidate.
 - **`display.glyphs`** — emoji status markers (`true`) or ASCII markers like `[ME]`
   (`false`). The `--no-glyphs` flag overrides this per-run.
-- **`digestScope`** — the orgs/repos/involvement for the cross-repo `--all` view. Stored
-  now; consumed once `--all` breadth lands (not available yet).
+- **`digestScope`** — the orgs, repos, and involvement modes (`authored`, `involves`,
+  `review-requested`, `assignee`) that `/gh-contrib --all` surveys.
 
 The config is read tolerantly: a missing, partial, or malformed file falls back to
 defaults rather than erroring. No account is stored — the plugin always operates as the
@@ -114,8 +125,13 @@ run in over a month the baseline is treated as stale and the delta is suppressed
 of the current state. A merge that both opened and completed between two runs won't appear,
 since it was never seen open — an accepted limit of the single-snapshot design.
 
-Arriving in later versions: org/all breadth across many repos, and the setup/history
-commands.
+**Breadth (`--org` / `--all`).** Beyond a single repo, `--org [NAME]` surveys your open
+PRs/issues across an org and `--all` across your configured digest scope — grouped by
+court, each item labeled with its repository. Breadth shows current court only (no delta
+or AI attribution, which need a local checkout).
+
+Arriving in later versions: the `/gh-contrib-history` command (a chronological timeline
+for a single PR or issue).
 
 ## License
 

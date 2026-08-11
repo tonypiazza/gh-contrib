@@ -33,8 +33,7 @@ Set up or update the user's gh-contrib configuration.
    ```
 
 6. **Confirm** what was written and where. Note that settings take effect on the next
-   `/gh-contrib` run, and that `--all` breadth (which uses `digestScope`) is not available
-   yet — the scope is stored now so it's ready when that lands.
+   `/gh-contrib` run, and that `digestScope` is what `/gh-contrib --all` surveys.
 
 Notes: never store an account/username in the config (the tool always uses the
 authenticated gh user). The config is optional — the plugin works with defaults if this is
