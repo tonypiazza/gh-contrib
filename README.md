@@ -39,6 +39,12 @@ Inside a checkout of a GitHub repository you contribute to:
   `/gh-contrib-setup` (orgs, repos, involvement modes). Run setup first to define it.
 - `/gh-contrib --json` — raw JSON (for scripting); works with any of the above.
 - `/gh-contrib --no-glyphs` — ASCII status markers instead of emoji.
+- `/gh-contrib-history <ref>` — the full chronological history of one PR or issue
+  (commits, reviews, comments, CI over time), narrated with ball-in-court reasoning at
+  each step — the read-only view to consult right before you nudge or reply. Reference it
+  as `owner/repo#number`, a bare `#number` (current repo), or a PR/issue URL.
+- `/gh-contrib-setup` — configure your digest scope, staleness threshold, and display
+  (see Configuration below).
 
 **Breadth cost & scope.** `--org`/`--all` run one GitHub search per (org/repo × involvement
 mode), so a broad `--all` scope means more calls; keep the configured scope focused. In
@@ -130,8 +136,14 @@ PRs/issues across an org and `--all` across your configured digest scope — gro
 court, each item labeled with its repository. Breadth shows current court only (no delta
 or AI attribution, which need a local checkout).
 
-Arriving in later versions: the `/gh-contrib-history` command (a chronological timeline
-for a single PR or issue).
+**History (`/gh-contrib-history <ref>`).** For a single PR or issue, pulls its commits,
+reviews, comments, and CI into one chronological timeline and narrates the ball-in-court
+story step by step — read-only.
+
+The original feature set is complete. Deliberately deferred for now: drafting/posting
+nudge comments (the tool stays read-only), and an external-delivery scheduled digest
+(email/Slack) — the built-in schedulers can't reliably push, so the delta serves the
+"what changed" need on demand instead.
 
 ## License
 
