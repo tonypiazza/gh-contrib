@@ -249,11 +249,29 @@ def transcript_dir(cwd, env=None):
 SNAPSHOT_MAX_AGE_DAYS = 30  # older baseline -> suppress the "since last run" delta
 
 
-def state_dir(env=None):
-    """Directory holding per-scope snapshots. $GH_CONTRIB_HOME/state or ~/.gh-contrib/state."""
+def _gh_contrib_home(env=None):
+    """The ~/.gh-contrib base directory ($GH_CONTRIB_HOME overrides)."""
     env = env if env is not None else os.environ
-    home = env.get("GH_CONTRIB_HOME") or (env.get("HOME", "") + "/.gh-contrib")
-    return f"{home}/state"
+    return env.get("GH_CONTRIB_HOME") or (env.get("HOME", "") + "/.gh-contrib")
+
+
+def state_dir(env=None):
+    """Directory holding per-scope snapshots ($GH_CONTRIB_HOME/state or ~/.gh-contrib/state)."""
+    return f"{_gh_contrib_home(env=env)}/state"
+
+
+def config_path(env=None):
+    """Path to the user config file."""
+    return f"{_gh_contrib_home(env=env)}/config.json"
+
+
+def default_config():
+    """Fresh copy of the default config (never a shared mutable singleton)."""
+    return {
+        "digestScope": {"orgs": [], "repos": [], "involvement": ["authored"]},
+        "thresholds": {"staleDays": 14},
+        "display": {"glyphs": True},
+    }
 
 
 def snapshot_path(scope_id, env=None):

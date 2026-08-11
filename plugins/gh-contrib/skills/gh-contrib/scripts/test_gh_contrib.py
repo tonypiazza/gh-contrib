@@ -1249,5 +1249,33 @@ class TestRenderDeltaAge(unittest.TestCase):
         self.assertNotIn("(20", out)
 
 
+class TestConfigPathDefaults(unittest.TestCase):
+    def test_config_path_default(self):
+        self.assertEqual(g.config_path(env={"HOME": "/Users/x"}),
+                         "/Users/x/.gh-contrib/config.json")
+
+    def test_config_path_override(self):
+        self.assertEqual(
+            g.config_path(env={"HOME": "/Users/x", "GH_CONTRIB_HOME": "/c"}),
+            "/c/config.json")
+
+    def test_state_dir_still_works(self):
+        self.assertEqual(g.state_dir(env={"HOME": "/Users/x"}),
+                         "/Users/x/.gh-contrib/state")
+
+    def test_default_config_shape(self):
+        d = g.default_config()
+        self.assertEqual(d["thresholds"]["staleDays"], 14)
+        self.assertTrue(d["display"]["glyphs"])
+        self.assertEqual(d["digestScope"]["involvement"], ["authored"])
+        self.assertEqual(d["digestScope"]["orgs"], [])
+        self.assertEqual(d["digestScope"]["repos"], [])
+
+    def test_default_config_is_fresh_copy(self):
+        d1 = g.default_config()
+        d1["thresholds"]["staleDays"] = 99
+        self.assertEqual(g.default_config()["thresholds"]["staleDays"], 14)
+
+
 if __name__ == "__main__":
     unittest.main()
