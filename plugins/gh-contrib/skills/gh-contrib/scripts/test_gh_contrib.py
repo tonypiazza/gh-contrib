@@ -1551,5 +1551,35 @@ class TestBreadthCapNotice(unittest.TestCase):
         self.assertIn("search signals only", n)
 
 
+class TestParseRef(unittest.TestCase):
+    def test_owner_repo_hash_number(self):
+        self.assertEqual(g.parse_ref("acme/widget#42", "cur/repo"),
+                         ("acme/widget", 42))
+
+    def test_bare_hash_number_uses_current(self):
+        self.assertEqual(g.parse_ref("#42", "cur/repo"), ("cur/repo", 42))
+
+    def test_bare_number_uses_current(self):
+        self.assertEqual(g.parse_ref("42", "cur/repo"), ("cur/repo", 42))
+
+    def test_pr_url(self):
+        self.assertEqual(
+            g.parse_ref("https://github.com/acme/widget/pull/42", "cur/repo"),
+            ("acme/widget", 42))
+
+    def test_issue_url(self):
+        self.assertEqual(
+            g.parse_ref("https://github.com/acme/widget/issues/7", "cur/repo"),
+            ("acme/widget", 7))
+
+    def test_bad_ref_exits(self):
+        with self.assertRaises(SystemExit):
+            g.parse_ref("nonsense", "cur/repo")
+
+    def test_bare_number_no_current_exits(self):
+        with self.assertRaises(SystemExit):
+            g.parse_ref("42", None)
+
+
 if __name__ == "__main__":
     unittest.main()

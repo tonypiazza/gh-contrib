@@ -232,6 +232,36 @@ def canonical_repo(repo, gh=run_gh):
     return repo
 
 
+_REF_URL_RE = re.compile(
+    r"github\.com/(?P<repo>[^/]+/[^/]+)/(?:pull|issues)/(?P<num>\d+)")
+_REF_REPO_HASH_RE = re.compile(r"^(?P<repo>[^/\s]+/[^/\s#]+)#(?P<num>\d+)$")
+_REF_BARE_RE = re.compile(r"^#?(?P<num>\d+)$")
+
+
+def parse_ref(ref, current_repo):
+    """Parse a PR/issue reference into (repo, number).
+
+    Forms: 'owner/repo#N', a github.com PR/issue URL, or bare 'N'/'#N'
+    (uses current_repo). Exits with a clear message on an unparseable ref
+    or a bare number with no current repo.
+    """
+    ref = (ref or "").strip()
+    m = _REF_URL_RE.search(ref)
+    if m:
+        return m.group("repo"), int(m.group("num"))
+    m = _REF_REPO_HASH_RE.match(ref)
+    if m:
+        return m.group("repo"), int(m.group("num"))
+    m = _REF_BARE_RE.match(ref)
+    if m:
+        if not current_repo:
+            sys.exit("error: a bare number needs a repo — run inside a repo "
+                     "or use owner/repo#N.")
+        return current_repo, int(m.group("num"))
+    sys.exit(f"error: could not parse reference '{ref}'. "
+             f"Use owner/repo#N, #N, or a PR/issue URL.")
+
+
 def transcript_dir(cwd, env=None):
     """Path to this repo's Claude Code transcript directory (pure).
 
