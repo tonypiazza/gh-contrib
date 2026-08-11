@@ -730,7 +730,25 @@ def _court_label(court):
     return entry[2] if entry else court
 
 
-def render_delta(delta, gone_states, glyphs=True):
+def _humanize_age(prev_time, now):
+    """'2 days ago (2026-08-08)' from an ISO savedAt; '' if unparseable/None."""
+    try:
+        dt = _parse_iso(prev_time) if prev_time else None
+    except ValueError:
+        return ""
+    if dt is None:
+        return ""
+    days = (now - dt).days
+    if days <= 0:
+        rel = "today"
+    elif days == 1:
+        rel = "yesterday"
+    else:
+        rel = f"{days} days ago"
+    return f"{rel} ({prev_time[:10]})"
+
+
+def render_delta(delta, gone_states, glyphs=True, prev_time=None, now=None):
     """Render the leading 'What changed since last run' block (pure).
 
     A MERGED item gets a warm, congratulatory line (deliberate — the one place
@@ -745,6 +763,9 @@ def render_delta(delta, gone_states, glyphs=True):
         return ("**What changed** — _Last snapshot was over "
                 f"{SNAPSHOT_MAX_AGE_DAYS} days ago; showing current state only._\n")
 
+    age = _humanize_age(prev_time, now) if (prev_time and now) else ""
+    since = f" _(last run: {age})_" if age else ""
+
     gone_by_url = {g_["url"]: g_ for g_ in gone_states}
     merged = [gone_by_url[u] for u in delta["gone"]
               if gone_by_url.get(u, {}).get("state") == "MERGED"]
@@ -754,9 +775,9 @@ def render_delta(delta, gone_states, glyphs=True):
     new = delta["new"]
 
     if not (merged or closed or flips or new):
-        return "**What changed** — _No changes since your last run._\n"
+        return f"**What changed** — _No changes since your last run._{since}\n"
 
-    lines = ["**What changed since your last run**", ""]
+    lines = [f"**What changed since your last run**{since}", ""]
     for m in merged:
         lines.append(f"- 🎉 Merged: #{m['number']} {m['title']} — nice work landing that.")
     for c in closed:

@@ -1191,5 +1191,48 @@ class TestRunDelta(unittest.TestCase):
         self.assertEqual(delta["baseline"], "first")
 
 
+class TestHumanizeAge(unittest.TestCase):
+    NOW = _dt.datetime(2026, 8, 10, 12, 0, 0, tzinfo=_dt.timezone.utc)
+
+    def test_days_ago(self):
+        self.assertEqual(g._humanize_age("2026-08-08T00:00:00Z", self.NOW),
+                         "2 days ago (2026-08-08)")
+
+    def test_yesterday(self):
+        self.assertEqual(g._humanize_age("2026-08-09T00:00:00Z", self.NOW),
+                         "yesterday (2026-08-09)")
+
+    def test_today(self):
+        self.assertEqual(g._humanize_age("2026-08-10T01:00:00Z", self.NOW),
+                         "today (2026-08-10)")
+
+    def test_bad_timestamp_returns_empty(self):
+        self.assertEqual(g._humanize_age("garbage", self.NOW), "")
+        self.assertEqual(g._humanize_age(None, self.NOW), "")
+
+
+class TestRenderDeltaAge(unittest.TestCase):
+    NOW = _dt.datetime(2026, 8, 10, 12, 0, 0, tzinfo=_dt.timezone.utc)
+
+    def test_ok_header_shows_age_when_given(self):
+        delta = {"baseline": "ok", "new": ["u9"], "court_changed": [], "gone": []}
+        out = g.render_delta(delta, [], glyphs=True,
+                             prev_time="2026-08-08T00:00:00Z", now=self.NOW)
+        self.assertIn("2 days ago (2026-08-08)", out)
+
+    def test_no_changes_shows_age_when_given(self):
+        delta = {"baseline": "ok", "new": [], "court_changed": [], "gone": []}
+        out = g.render_delta(delta, [], glyphs=True,
+                             prev_time="2026-08-09T00:00:00Z", now=self.NOW)
+        self.assertIn("no changes since your last run", out.lower())
+        self.assertIn("yesterday (2026-08-09)", out)
+
+    def test_no_age_when_prev_time_absent(self):
+        delta = {"baseline": "ok", "new": [], "court_changed": [], "gone": []}
+        out = g.render_delta(delta, [], glyphs=True)
+        self.assertIn("no changes since your last run", out.lower())
+        self.assertNotIn("(20", out)
+
+
 if __name__ == "__main__":
     unittest.main()
