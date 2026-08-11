@@ -768,7 +768,7 @@ def _marker(court, glyphs):
     return glyph if glyphs else text
 
 
-def render_dense(repo, items, glyphs=True):
+def render_dense(repo, items, glyphs=True, show_repo=False):
     """Render items as a dense, court-grouped markdown digest string."""
     if not items:
         return f"**{repo}** — Nothing open of yours here.\n"
@@ -789,7 +789,9 @@ def render_dense(repo, items, glyphs=True):
         lines.append(f"## {COURT_DISPLAY[court][2]}")
         for it in group:
             marker = _marker(court, glyphs)
-            lines.append(f"- {marker} {it['title']} · #{it['number']} · {it['url']}")
+            ref = (f"{it.get('repo')}#{it['number']}" if show_repo and it.get("repo")
+                   else f"#{it['number']}")
+            lines.append(f"- {marker} {it['title']} · {ref} · {it['url']}")
         lines.append("")
     return "\n".join(lines)
 

@@ -1485,5 +1485,26 @@ class TestFetchScope(unittest.TestCase):
         self.assertEqual(len(gh.calls["args"]), 1)  # deduped to one search
 
 
+class TestRenderDenseShowRepo(unittest.TestCase):
+    def _items(self):
+        return [
+            {"kind": "pr", "number": 1, "title": "A", "url": "u1",
+             "repo": "acme/r1", "court": g.COURT_WAITING_ON_ME},
+            {"kind": "issue", "number": 2, "title": "B", "url": "u2",
+             "repo": "acme/r2", "court": g.COURT_WAITING_ON_THEM},
+        ]
+
+    def test_show_repo_includes_repo_in_line(self):
+        out = g.render_dense("your scope", self._items(), glyphs=True,
+                             show_repo=True)
+        self.assertIn("acme/r1#1", out)
+        self.assertIn("acme/r2#2", out)
+
+    def test_default_omits_repo(self):
+        out = g.render_dense("o/r", self._items(), glyphs=True)
+        self.assertNotIn("acme/r1#1", out)
+        self.assertIn("#1", out)
+
+
 if __name__ == "__main__":
     unittest.main()
