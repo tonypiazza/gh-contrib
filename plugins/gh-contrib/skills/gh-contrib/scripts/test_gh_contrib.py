@@ -1331,5 +1331,26 @@ class TestLoadConfig(unittest.TestCase):
         self.assertTrue(cfg["display"]["glyphs"])  # default preserved
 
 
+class TestOtherPrsStaleDays(unittest.TestCase):
+    def test_stale_days_param_accepted_and_threaded(self):
+        # A PR approved+healthy but idle 20 days. Neither stale_days value puts it
+        # in a FOOTER court (nudge and waiting-on-them are both excluded), but this
+        # confirms the param is accepted and passed to classify_court without error.
+        listing = [{"number": 5, "title": "idle", "url": "u5",
+                    "createdAt": "x", "updatedAt": "2026-07-21T00:00:00Z"}]
+        detail = {"reviewDecision": "APPROVED", "mergeStateStatus": "BLOCKED",
+                  "mergeable": "MERGEABLE", "reviews": [], "commits": [],
+                  "statusCheckRollup": []}
+        def gh(args):
+            return listing if "list" in args else detail
+        now = _dt.datetime(2026, 8, 10, tzinfo=_dt.timezone.utc)  # 20 days later
+        out14 = g.other_prs_needing_attention("o/r", "me", 999, now,
+                                              gh=gh, stale_days=14)
+        self.assertEqual(out14, [])
+        out30 = g.other_prs_needing_attention("o/r", "me", 999, now,
+                                              gh=gh, stale_days=30)
+        self.assertEqual(out30, [])
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -675,7 +675,8 @@ def resolve_current_pr(repo, branch, gh=run_gh):
 _FOOTER_COURTS = (COURT_WAITING_ON_ME, COURT_CI_SUSPECT)
 
 
-def other_prs_needing_attention(repo, me, exclude_number, now, gh=run_gh):
+def other_prs_needing_attention(repo, me, exclude_number, now, gh=run_gh,
+                                stale_days=STALE_DAYS):
     """The user's other open PRs in `repo` currently needing attention.
 
     Excludes `exclude_number` (the PR shown in full). Enriches + classifies each
@@ -692,7 +693,7 @@ def other_prs_needing_attention(repo, me, exclude_number, now, gh=run_gh):
             continue
         item = normalize_item(p, kind="pr")
         enrich_item(item, repo, me, gh=gh)
-        item["court"] = classify_court(item, now)
+        item["court"] = classify_court(item, now, stale_days=stale_days)
         if item["court"] in _FOOTER_COURTS:
             out.append(item)
     return out
