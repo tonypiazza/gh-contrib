@@ -1712,5 +1712,46 @@ class TestFetchItemDetail(unittest.TestCase):
         self.assertEqual(calls, ["pr", "issue"])
 
 
+class TestHistoryDispatch(unittest.TestCase):
+    def test_run_history_builds_payload(self):
+        detail = {"number": 7, "title": "t", "url": "u", "state": "OPEN",
+                  "reviews": [], "comments": [
+                      {"createdAt": "2026-08-03T00:00:00Z",
+                       "author": {"login": "me"}}],
+                  "commits": [], "statusCheckRollup": []}
+        payload = g.run_history("o/r#7", current_repo="cur/repo",
+                                fetch=lambda repo, num: ("issue", detail))
+        self.assertEqual(payload["repo"], "o/r")
+        self.assertEqual(payload["number"], 7)
+        self.assertEqual(payload["kind"], "issue")
+        self.assertEqual([e["type"] for e in payload["timeline"]], ["comment"])
+
+    def test_run_history_pr_path_passes_kind_and_types(self):
+        detail = {"number": 7036, "title": "t", "url": "u", "state": "OPEN",
+                  "commits": [{"committedDate": "2026-08-01T10:00:00Z",
+                               "messageHeadline": "c", "oid": "abcd1234"}],
+                  "reviews": [{"submittedAt": "2026-08-02T00:00:00Z",
+                               "state": "CHANGES_REQUESTED",
+                               "author": {"login": "maint"}}],
+                  "comments": [{"createdAt": "2026-08-03T00:00:00Z",
+                                "author": {"login": "me"}}],
+                  "statusCheckRollup": [{"conclusion": "FAILURE"}]}
+        payload = g.run_history("o/r#7036", current_repo="cur/repo",
+                                fetch=lambda repo, num: ("pr", detail))
+        self.assertEqual(payload["kind"], "pr")
+        types = {e["type"] for e in payload["timeline"]}
+        self.assertTrue({"commit", "review", "comment", "ci"} <= types)
+
+    def test_run_history_bad_ref_exits(self):
+        with self.assertRaises(SystemExit):
+            g.run_history("nonsense", current_repo=None,
+                          fetch=lambda repo, num: ("pr", {}))
+
+    def test_run_history_bare_ref_no_repo_exits(self):
+        with self.assertRaises(SystemExit):
+            g.run_history("#7", current_repo=None,
+                          fetch=lambda repo, num: ("issue", {}))
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -1059,6 +1059,8 @@ def build_parser():
     p.add_argument("--json", action="store_true", help="raw JSON output")
     p.add_argument("--no-glyphs", action="store_true",
                    help="ASCII court markers instead of emoji")
+    p.add_argument("--history", metavar="REF", default=None,
+                   help="show the chronological timeline for a PR/issue REF")
     return p
 
 
@@ -1106,8 +1108,31 @@ def config_stale_days(config):
         return STALE_DAYS
 
 
+def run_history(ref, current_repo, fetch=fetch_item_detail):
+    """Resolve a ref, fetch its detail, and build the timeline payload.
+
+    `fetch(repo, number) -> (kind, detail)` is injectable for testing.
+    """
+    repo, number = parse_ref(ref, current_repo)
+    kind, detail = fetch(repo, number)
+    return {
+        "repo": repo, "number": number, "kind": kind,
+        "title": detail.get("title"), "url": detail.get("url"),
+        "state": detail.get("state"),
+        "timeline": build_timeline(detail, kind),
+    }
+
+
 def main(argv=None):
     ns = validate_flags(build_parser().parse_args(argv))
+
+    if ns.history is not None:
+        try:
+            current = canonical_repo(resolve_repo())
+        except SystemExit:
+            current = None
+        print(json.dumps(run_history(ns.history, current), indent=2))
+        return
 
     if ns.rich:
         sys.exit("error: --rich is not available yet (later phase).")
