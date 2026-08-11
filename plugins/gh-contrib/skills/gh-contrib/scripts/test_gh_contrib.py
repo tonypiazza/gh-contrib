@@ -1127,7 +1127,7 @@ class TestRunDelta(unittest.TestCase):
         items = [{"kind": "pr", "number": 1, "title": "A", "url": "u1",
                   "court": g.COURT_WAITING_ON_ME}]
         now = _dt.datetime(2026, 8, 10, tzinfo=_dt.timezone.utc)
-        delta, gone = g.run_delta("repo:o/r", items, "o/r", now,
+        delta, gone, prev_time = g.run_delta("repo:o/r", items, "o/r", now,
                                   env={"HOME": "/h"}, reader=reader,
                                   writer=writer, gh=lambda a: {})
         self.assertEqual(delta["baseline"], "first")
@@ -1145,7 +1145,7 @@ class TestRunDelta(unittest.TestCase):
         g.run_delta("repo:o/r", first, "o/r", now1, env={"HOME": "/h"},
                     reader=reader, writer=writer, gh=lambda a: {})
         now2 = _dt.datetime(2026, 8, 10, tzinfo=_dt.timezone.utc)
-        delta, gone = g.run_delta("repo:o/r", [], "o/r", now2,
+        delta, gone, prev_time = g.run_delta("repo:o/r", [], "o/r", now2,
                                   env={"HOME": "/h"}, reader=reader,
                                   writer=writer, gh=lambda a: {"state": "MERGED"})
         self.assertEqual(delta["gone"], ["https://github.com/o/r/pull/1"])
@@ -1168,7 +1168,7 @@ class TestRunDelta(unittest.TestCase):
         now2 = _dt.datetime(2026, 8, 10, tzinfo=_dt.timezone.utc)
         run2_items = [{"kind": "pr", "number": 1, "title": "A", "url": url,
                        "court": g.COURT_WAITING_ON_ME}]  # flipped
-        delta, gone = g.run_delta("repo:o/r", run2_items, "o/r", now2,
+        delta, gone, prev_time = g.run_delta("repo:o/r", run2_items, "o/r", now2,
                                   env={"HOME": "/h"}, reader=reader,
                                   writer=writer, gh=lambda a: {})
         self.assertEqual(delta["court_changed"],
@@ -1185,10 +1185,25 @@ class TestRunDelta(unittest.TestCase):
         now = _dt.datetime(2026, 8, 10, tzinfo=_dt.timezone.utc)
         items = [{"kind": "pr", "number": 1, "title": "A", "url": "u1",
                   "court": g.COURT_WAITING_ON_ME}]
-        delta, gone = g.run_delta("repo:o/r", items, "o/r", now,
+        delta, gone, prev_time = g.run_delta("repo:o/r", items, "o/r", now,
                                   env={"HOME": "/h"}, reader=reader,
                                   writer=writer, gh=gh)
         self.assertEqual(delta["baseline"], "first")
+
+    def test_run_delta_returns_prev_time_on_second_run(self):
+        store = {}
+        writer = lambda p, t: store.__setitem__(p, t)
+        reader = lambda p: store[p]
+        now1 = _dt.datetime(2026, 8, 9, tzinfo=_dt.timezone.utc)
+        items = [{"kind": "pr", "number": 1, "title": "A", "url": "u1",
+                  "court": g.COURT_WAITING_ON_ME}]
+        g.run_delta("repo:o/r", items, "o/r", now1, env={"HOME": "/h"},
+                    reader=reader, writer=writer, gh=lambda a: {})
+        now2 = _dt.datetime(2026, 8, 10, tzinfo=_dt.timezone.utc)
+        delta, gone, prev_time = g.run_delta("repo:o/r", items, "o/r", now2,
+                                             env={"HOME": "/h"}, reader=reader,
+                                             writer=writer, gh=lambda a: {})
+        self.assertEqual(prev_time, "2026-08-09T00:00:00Z")
 
 
 class TestHumanizeAge(unittest.TestCase):

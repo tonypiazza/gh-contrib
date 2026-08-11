@@ -362,7 +362,7 @@ def run_delta(scope_id, items, repo, now, env=None, reader=None, writer=None,
               gh=run_gh):
     """Load prior snapshot, compute delta, resolve gone states, save new snapshot.
 
-    Returns (delta, gone_states). The snapshot is saved here (successful path).
+    Returns (delta, gone_states, prev_time). The snapshot is saved here (successful path).
     """
     previous, prev_time = load_snapshot(scope_id, reader=reader, env=env)
     current = fingerprint(items)
@@ -374,7 +374,7 @@ def run_delta(scope_id, items, repo, now, env=None, reader=None, writer=None,
         save_snapshot(scope_id, items, now, writer=writer, env=env)
     except OSError:
         pass  # best-effort: a failed baseline refresh must not drop the report
-    return delta, gone_states
+    return delta, gone_states, prev_time
 
 
 _EDIT_TOOLS = ("Edit", "Write", "MultiEdit", "NotebookEdit")
@@ -871,7 +871,7 @@ def main(argv=None):
             pr["aiAuthoredFiles"] = attributed_files(
                 touched, pr_changed_files(repo, pr["number"]))
             others = other_prs_needing_attention(repo, me, pr["number"], now)
-            delta, gone_states = run_delta(
+            delta, gone_states, prev_time = run_delta(
                 f"pr:{repo}#{pr['number']}", [pr], repo, now)
             if ns.json:
                 print(json.dumps({"repo": repo, "currentPr": pr,
@@ -879,7 +879,8 @@ def main(argv=None):
                                   "delta": delta}, indent=2))
                 return
             delta_block = render_delta(delta, gone_states,
-                                       glyphs=not ns.no_glyphs)
+                                       glyphs=not ns.no_glyphs,
+                                       prev_time=prev_time, now=now)
             print(delta_block + "\n"
                   + render_pr_detail(repo, pr, others, glyphs=not ns.no_glyphs))
             return
@@ -895,12 +896,13 @@ def main(argv=None):
         enrich_item(it, repo, me)
         it["court"] = classify_court(it, now)
 
-    delta, gone_states = run_delta(f"repo:{repo}", items, repo, now)
+    delta, gone_states, prev_time = run_delta(f"repo:{repo}", items, repo, now)
     if ns.json:
         print(json.dumps({"repo": repo, "items": items, "delta": delta},
                          indent=2))
         return
-    delta_block = render_delta(delta, gone_states, glyphs=not ns.no_glyphs)
+    delta_block = render_delta(delta, gone_states, glyphs=not ns.no_glyphs,
+                               prev_time=prev_time, now=now)
     print(delta_block + "\n" + render_dense(repo, items, glyphs=not ns.no_glyphs))
 
 
