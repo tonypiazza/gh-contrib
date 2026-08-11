@@ -1688,5 +1688,29 @@ class TestBuildTimeline(unittest.TestCase):
         self.assertEqual(ci["at"], "2026-08-05T10:00:00Z")  # latest commit
 
 
+class TestFetchItemDetail(unittest.TestCase):
+    def test_pr_path(self):
+        def gh(args):
+            assert args[0:2] == ["pr", "view"]
+            return {"number": 1, "title": "a pr", "reviews": [], "commits": [],
+                    "comments": [], "statusCheckRollup": [], "state": "OPEN"}
+        kind, detail = g.fetch_item_detail("o/r", 1, gh=gh)
+        self.assertEqual(kind, "pr")
+        self.assertEqual(detail["title"], "a pr")
+
+    def test_falls_back_to_issue(self):
+        calls = []
+        def gh(args):
+            calls.append(args[0])
+            if args[0] == "pr":
+                raise g._NotFound("not a pr")
+            return {"number": 2, "title": "an issue", "comments": [],
+                    "state": "OPEN"}
+        kind, detail = g.fetch_item_detail("o/r", 2, gh=gh)
+        self.assertEqual(kind, "issue")
+        self.assertEqual(detail["title"], "an issue")
+        self.assertEqual(calls, ["pr", "issue"])
+
+
 if __name__ == "__main__":
     unittest.main()

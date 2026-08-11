@@ -682,6 +682,43 @@ def build_timeline(detail, kind):
     return events
 
 
+class _NotFound(Exception):
+    """A gh view call resolved to no such item (used for PR->issue fallback)."""
+
+
+_PR_HISTORY_FIELDS = ("number,title,url,state,reviews,comments,commits,"
+                      "statusCheckRollup")
+_ISSUE_HISTORY_FIELDS = "number,title,url,state,comments"
+
+
+def _probe_gh(args):
+    """Run gh, raising _NotFound on a 'no such PR/issue' error instead of exiting."""
+    try:
+        proc = subprocess.run(["gh", *args], capture_output=True, text=True,
+                              check=True)
+    except subprocess.CalledProcessError as exc:
+        stderr = (exc.stderr or "")
+        if "Could not resolve" in stderr or "not found" in stderr.lower():
+            raise _NotFound(stderr)
+        sys.exit(f"error: gh command failed: {stderr.strip()}")
+    return json.loads(proc.stdout)
+
+
+def fetch_item_detail(repo, number, gh=_probe_gh):
+    """Fetch a PR's or issue's detail, auto-detecting which. Returns (kind, detail).
+
+    Tries `pr view` first; on _NotFound falls back to `issue view`.
+    """
+    try:
+        detail = gh(["pr", "view", str(number), "--repo", repo,
+                     "--json", _PR_HISTORY_FIELDS])
+        return "pr", detail
+    except _NotFound:
+        detail = gh(["issue", "view", str(number), "--repo", repo,
+                     "--json", _ISSUE_HISTORY_FIELDS])
+        return "issue", detail
+
+
 def describe_pr_state(pr):
     """Ordered human-readable status phrases for an enriched PR (pure).
 
