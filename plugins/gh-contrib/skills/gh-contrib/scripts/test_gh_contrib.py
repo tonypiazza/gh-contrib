@@ -1389,5 +1389,19 @@ class TestConfigStaleDays(unittest.TestCase):
             g.config_stale_days({"thresholds": {"staleDays": "21"}}), 21)
 
 
+class TestNormalizeItemRepo(unittest.TestCase):
+    def test_captures_repo_from_search_result(self):
+        raw = {"number": 1, "title": "t", "url": "u",
+               "createdAt": "x", "updatedAt": "y",
+               "repository": {"nameWithOwner": "acme/widget"}}
+        item = g.normalize_item(raw, kind="pr")
+        self.assertEqual(item["repo"], "acme/widget")
+
+    def test_repo_none_when_absent(self):
+        raw = {"number": 1, "title": "t", "url": "u",
+               "createdAt": "x", "updatedAt": "y"}
+        self.assertIsNone(g.normalize_item(raw, kind="pr")["repo"])
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -533,6 +533,7 @@ def normalize_item(raw, kind):
         "url": raw.get("url") or "",
         "createdAt": raw.get("createdAt"),
         "updatedAt": raw.get("updatedAt"),
+        "repo": (raw.get("repository") or {}).get("nameWithOwner"),
     }
 
 
