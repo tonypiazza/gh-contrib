@@ -1277,5 +1277,59 @@ class TestConfigPathDefaults(unittest.TestCase):
         self.assertEqual(g.default_config()["thresholds"]["staleDays"], 14)
 
 
+class TestLoadConfig(unittest.TestCase):
+    def test_merge_partial_over_base(self):
+        base = g.default_config()
+        merged = g.merge_config(base, {"thresholds": {"staleDays": 30}})
+        self.assertEqual(merged["thresholds"]["staleDays"], 30)
+        self.assertTrue(merged["display"]["glyphs"])
+        self.assertEqual(merged["digestScope"]["involvement"], ["authored"])
+
+    def test_merge_does_not_mutate_base(self):
+        base = g.default_config()
+        g.merge_config(base, {"display": {"glyphs": False}})
+        self.assertTrue(base["display"]["glyphs"])
+
+    def test_merge_replaces_scalar_and_list(self):
+        merged = g.merge_config(g.default_config(),
+                                {"digestScope": {"orgs": ["acme"]}})
+        self.assertEqual(merged["digestScope"]["orgs"], ["acme"])
+        self.assertEqual(merged["digestScope"]["repos"], [])
+
+    def test_load_absent_returns_defaults(self):
+        def reader(path):
+            raise FileNotFoundError(path)
+        cfg = g.load_config(env={"HOME": "/h"}, reader=reader)
+        self.assertEqual(cfg, g.default_config())
+
+    def test_load_malformed_returns_defaults(self):
+        cfg = g.load_config(env={"HOME": "/h"}, reader=lambda p: "not json{")
+        self.assertEqual(cfg, g.default_config())
+
+    def test_load_partial_merges_over_defaults(self):
+        reader = lambda p: json.dumps({"thresholds": {"staleDays": 45}})
+        cfg = g.load_config(env={"HOME": "/h"}, reader=reader)
+        self.assertEqual(cfg["thresholds"]["staleDays"], 45)
+        self.assertTrue(cfg["display"]["glyphs"])
+
+    def test_load_non_dict_returns_defaults(self):
+        cfg = g.load_config(env={"HOME": "/h"}, reader=lambda p: "[1,2,3]")
+        self.assertEqual(cfg, g.default_config())
+
+    def test_scalar_override_cannot_clobber_dict_key(self):
+        merged = g.merge_config(g.default_config(), {"thresholds": 5})
+        self.assertIsInstance(merged["thresholds"], dict)      # invariant held
+        self.assertEqual(merged["thresholds"]["staleDays"], 14)  # default kept
+        # and the downstream reader pattern no longer crashes:
+        self.assertEqual(
+            (merged.get("thresholds") or {}).get("staleDays", 99), 14)
+
+    def test_load_with_scalar_where_dict_expected_stays_safe(self):
+        reader = lambda p: json.dumps({"display": "yes"})  # scalar, not a dict
+        cfg = g.load_config(env={"HOME": "/h"}, reader=reader)
+        self.assertIsInstance(cfg["display"], dict)
+        self.assertTrue(cfg["display"]["glyphs"])  # default preserved
+
+
 if __name__ == "__main__":
     unittest.main()

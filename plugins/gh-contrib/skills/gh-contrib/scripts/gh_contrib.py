@@ -274,6 +274,41 @@ def default_config():
     }
 
 
+def merge_config(base, overrides):
+    """Overlay `overrides` (possibly partial) onto `base`, two levels deep.
+
+    Top-level keys merge; a sub-dict value merges key-by-key; anything else
+    replaces. Neither input is mutated.
+    """
+    result = {k: dict(v) if isinstance(v, dict) else v for k, v in base.items()}
+    if not isinstance(overrides, dict):
+        return result
+    for key, val in overrides.items():
+        if isinstance(result.get(key), dict):
+            # A dict-typed default must stay a dict: merge a dict override
+            # key-by-key; ignore a non-dict override (malformed) to preserve
+            # the structural invariant downstream readers rely on.
+            if isinstance(val, dict):
+                merged = dict(result[key])
+                merged.update(val)
+                result[key] = merged
+        else:
+            result[key] = val
+    return result
+
+
+def load_config(env=None, reader=None):
+    """Read config.json and merge over defaults; defaults on absent/malformed."""
+    reader = reader or _default_reader
+    try:
+        data = json.loads(reader(config_path(env=env)))
+    except (OSError, ValueError, TypeError, KeyError):
+        return default_config()
+    if not isinstance(data, dict):
+        return default_config()
+    return merge_config(default_config(), data)
+
+
 def snapshot_path(scope_id, env=None):
     """Filesystem path for a scope's snapshot (scope id sanitized for the filename)."""
     safe = re.sub(r"[/:#]+", "-", scope_id)
